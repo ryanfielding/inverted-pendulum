@@ -2,11 +2,13 @@
 #include "PLL.h"
 #include "tm4c123gh6pm.h"
 
+
 void PortF_Init(void);
-void PortE_PWM_Init(void);
+void PortB_PWM_Init(void);
 void PWM_Init(void);
 void PortF_Handler(void);
 void MSDelay(unsigned int itime);
+void ADC_Init(void);
 void disable_interrupts(void);
 void enable_interrupts(void);
 void wait_for_interrupts(void);
@@ -24,12 +26,13 @@ int main(void){
       SYSCTL_RCC2_R = 0x00000000;
       */
   PortF_Init();
-  PortE_PWM_Init();
+  PortB_PWM_Init();
   PWM_Init();
 
   enable_interrupts();
   while(1){
           wait_for_interrupts();
+          //printf("test");
   }
 }
 
@@ -72,7 +75,7 @@ void PWM_Init(void){
     PWM0_ENABLE_R = 0x00000001;
 }
 
-void PortE_PWM_Init(void){
+void PortB_PWM_Init(void){
     /*SYSCTL_RCGC2_R |= SYSCTL_RCGC2_GPIOE; //GPIO Port E PWM Clock enabled
     SYSCTL_RCGCGPIO_R |= 0x10;//enable clock to port E
     GPIO_PORTE_AFSEL_R |= 0x0030; //PE4,5 alternate functions enabled
@@ -119,6 +122,11 @@ void PortF_Handler(void){
     if (PWM0_0_CMPA_R <= 0) {
         PWM0_0_CMPA_R = 0x7A12;
     }
+
+
+}
+
+void ADC_Init(void){
 
 }
 
