@@ -2,7 +2,6 @@
 #include "PLL.h"
 #include "tm4c123gh6pm.h"
 
-
 #include <stdint.h>
 #include <stdbool.h>
 #include "stdlib.h"
@@ -13,22 +12,45 @@
 #include "inc/hw_pwm.h"
 #include "inc/hw_types.h"
 #include "driverlib/adc.h"
+#include "driverlib/timer.h"
+#include "driverlib/gpio.h"
+#include "driverlib/interrupt.h"
+#include "driverlib/pin_map.h"
+#include "driverlib/rom.h"
+#include "driverlib/rom_map.h"
+#include "driverlib/sysctl.h"
+#include "driverlib/uart.h"
+#include "driverlib/udma.h"
+#include "driverlib/pwm.h"
+#include "driverlib/ssi.h"
+#include "driverlib/systick.h"
+#include "driverlib/adc.h"
+#include "utils/uartstdio.h"
+#include "utils/uartstdio.c"
 #include <string.h>
 
 
 /* -----------------------      Function Prototypes     --------------------- */
 
+//Inits
 void PortF_Init(void);
 void PWM_Init(void);
-void PortF_Handler(void);
-void MSDelay(unsigned int itime);
 void ADC_Init(void);
+void InitConsole(void);
+
+//Interrupts, ISRs
 void disable_interrupts(void);
 void enable_interrupts(void);
 void wait_for_interrupts(void);
+void PortF_Handler(void);
 
+//Other
+void MSDelay(unsigned int itime);
+
+/* -----------------------      Global Variables        --------------------- */
 
 volatile signed long ComparatorValue = 5600;
+
 
 /* -----------------------          Main Program        --------------------- */
 int main(void){
@@ -36,12 +58,20 @@ int main(void){
     PLL_Init(); //set CPU clock to 80MHz
     PortF_Init();
     PWM_Init();
+
+    InitConsole();
+    // Display the setup on the terminal, View > Terminal
+    UARTprintf("ADC ->\n");
+    UARTprintf("  Type: Potentiometer\n");
+    UARTprintf("  Samples: One\n");
+    UARTprintf("  Update Rate: 250ms\n");
+
+
     // Master interrupt enable func for all interrupts
     IntMasterEnable();
-
     enable_interrupts();
     while(1){
-        wait_for_interrupts();
+
     }
 }
 
@@ -105,6 +135,33 @@ void PWM_Init(void) {
     PWM1_1_CTL_R |= 0x01;            // 10) start the timers in PWM generator 1 by enabling the PWM clock
     PWM1_ENABLE_R |= 0x0C;           // 11) Enable M1PWM2 and M1PWM3
 }
+
+//Initialize console to display information while debugging
+void InitConsole(void)
+{
+    // Enable GPIO port A which is used for UART0 pins.
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);
+
+    // Configure the pin muxing for UART0 functions on port A0 and A1.
+    // This step is not necessary if your part does not support pin muxing.
+    GPIOPinConfigure(GPIO_PA0_U0RX);
+    GPIOPinConfigure(GPIO_PA1_U0TX);
+
+
+    // Enable UART0 so that we can configure the clock.
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_UART0);
+
+    // Use the internal 16MHz oscillator as the UART clock source.
+    UARTClockSourceSet(UART0_BASE, UART_CLOCK_PIOSC);
+
+    // Select the alternate (UART) function for these pins.
+    GPIOPinTypeUART(GPIO_PORTA_BASE, GPIO_PIN_0 | GPIO_PIN_1);
+
+
+    // Initialize the UART for console I/O, baud rate of 115,200
+    UARTStdioConfig(0, 115200, 16000000);
+}
+
 
 void MSDelay(unsigned int itime){
     unsigned int i;
