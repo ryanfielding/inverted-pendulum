@@ -37,5 +37,4 @@ void SysTick_Init(unsigned long period);
 // Interrupt service routine
 // Executed every 20ns*(period)
 void SysTick_Handler(void);
-void PortF_Handler(void);
 #endif // __SYSTICKINTS_H__
