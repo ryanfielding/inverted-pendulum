@@ -34,6 +34,7 @@
 
 //Inits
 void PortF_Init(void);
+void PortC_Init(void);
 void PWM_Init(void);
 void ADC_Init(void);
 void InitConsole(void);
@@ -57,6 +58,7 @@ int main(void){
     //Inits
     PLL_Init(); //set CPU clock to 80MHz
     PortF_Init();
+    //PortC_Init();
     PWM_Init();
     ADC_Init();
     InitConsole();
@@ -73,6 +75,7 @@ int main(void){
     while(1){
         read_ADC();
         MSDelay(100);
+
     }
 }
 
@@ -84,13 +87,13 @@ void PortF_Init(void) {
     while ((SYSCTL_PRGPIO_R & 0x00000020) == 0)
     {};                          // wait until PortF is ready
     GPIO_PORTF_LOCK_R = 0x4C4F434B;         // unlock GPIO PortF
-    GPIO_PORTF_CR_R = 0x1F;                 // allow changes to PF4-0
-    GPIO_PORTF_AMSEL_R = 0x00;              // disable analog on PortF
-    GPIO_PORTF_PCTL_R = 0x00000000;         // use PF4-0 as GPIO
-    GPIO_PORTF_DIR_R = 0x0E;                // PF4,PF0 in, PF3-1 out
-    GPIO_PORTF_AFSEL_R = 0x00;              // disable alt function on PF
-    GPIO_PORTF_PUR_R = 0x11;                // enable pull-up on PF0,PF4
-    GPIO_PORTF_DEN_R = 0x1F;                // enable digital I/O on PF4-0
+    GPIO_PORTF_CR_R |= 0x1F;                 // allow changes to PF4-0
+    GPIO_PORTF_AMSEL_R &= 0x00;              // disable analog on PortF
+    GPIO_PORTF_PCTL_R &= ~0x000F0000; // configure PF4 as GPIO
+    GPIO_PORTF_DIR_R &= ~0x10;    // (c) make PF4 in (built-in button)
+    GPIO_PORTF_AFSEL_R &= ~0x10;  //     disable alt funct on PF4
+    GPIO_PORTF_PUR_R |= 0x10;     //     enable weak pull-up on PF4
+    GPIO_PORTF_DEN_R |= 0x10;     //     enable digital I/O on PF4
 
     GPIO_PORTF_IS_R &= ~0x10;     // (d) PF4 is edge-sensitive
     GPIO_PORTF_IBE_R &= ~0x10;    //     PF4 is not both edges
@@ -102,14 +105,49 @@ void PortF_Init(void) {
 }
 
 void PortF_Handler(void){
-    MSDelay (100);
+    /*MSDelay (100);
     GPIO_PORTF_ICR_R = 0x10;
     ComparatorValue -= 1000;
         if (ComparatorValue < 0){
             ComparatorValue = 10000; // reload to 10000 if it's less than 0
             PWM1_1_CMPA_R = abs(ComparatorValue - 1); // update comparatorA value
             PWM1_1_CMPB_R = abs(ComparatorValue - 1); // update comparatorB value
-        }
+        }*/
+    MSDelay (100);
+    GPIO_PORTF_ICR_R = 0x10;
+    PWM1_1_CMPA_R -= 0xC35;
+    PWM1_1_CMPB_R -= 0xC35;
+    if (PWM1_1_CMPA_R <= 0) {
+        PWM1_1_CMPA_R = 0x7A12;
+        PWM1_1_CMPB_R = 0x7A12;
+    }
+}
+
+/* Initialize PortC GPIOs */
+void PortC_Init(void) {
+    SYSCTL_RCGCGPIO_R |= 0x00000004; // (a) activate clock for port C
+    SYSCTL_RCGC2_R |= 0x00000004;           // activate clock for PortC
+    while ((SYSCTL_PRGPIO_R & 0x00000004) == 0)
+    {};                          // wait until PortC is ready
+    GPIO_PORTC_LOCK_R = 0x4C4F434B;         // unlock GPIO PortC
+    GPIO_PORTC_CR_R |= 0x0C;                 // allow changes to PC2,3
+    GPIO_PORTC_AMSEL_R &= 0x00;              // disable analog on PortC
+    GPIO_PORTC_PCTL_R &= ~0x0000FF00;         // use PC2,3 as GPIO
+    GPIO_PORTC_DIR_R &= ~0x0C;                // PC2,3 are inputs
+    GPIO_PORTC_AFSEL_R &= ~0x0C;              // disable alt function
+    GPIO_PORTC_PUR_R |= 0x0C;                // enable pull-up on PC2,3
+    GPIO_PORTC_DEN_R |= 0x0C;                // enable digital I/O on PC2,3
+
+    //Interrupts
+    /*
+    GPIO_PORTF_IS_R &= ~0x10;     // (d) PF4 is edge-sensitive
+    GPIO_PORTF_IBE_R &= ~0x10;    //     PF4 is not both edges
+    GPIO_PORTF_IEV_R &= ~0x10;    //     PF4 falling edge event
+    GPIO_PORTF_ICR_R = 0x10;      // (e) clear flag4
+    GPIO_PORTF_IM_R |= 0x10;      // (f) arm interrupt on PF4 *** No IME bit as mentioned in Book ***
+    NVIC_PRI7_R = (NVIC_PRI7_R & 0xFF00FFFF)|0x00A00000; // (g) priority 5
+    NVIC_EN0_R = 0x40000000;      // (h) enable interrupt 30 in NVIC for PF4 Handler
+    */
 }
 
 
@@ -131,8 +169,10 @@ void PWM_Init(void) {
     PWM1_1_GENB_R = 0x80C;           // 6.3) drives pwmB HIGH when counter matches value in PWM1LOAD
                                           // drive pwmB LOW when counter matches comparator B
     PWM1_1_LOAD_R = 10001 -1;        // 7) since target period is 100Hz, there are 10,000 clock ticks per period
-    PWM1_1_CMPA_R = 10000 -1;        // 8) set 0% duty cycle to PE4
-    PWM1_1_CMPB_R = 10000 -1;        // 9) set 0% duty cycle to PE5
+    //PWM1_1_CMPA_R = 10000 -1;        // 8) set 0% duty cycle to PE4
+    //PWM1_1_CMPB_R = 10000 -1;        // 9) set 0% duty cycle to PE5
+    PWM1_1_CMPA_R = 0x7A12;
+    PWM1_1_CMPB_R  = 0x7A12;
     PWM1_1_CTL_R |= 0x01;            // 10) start the timers in PWM generator 1 by enabling the PWM clock
     PWM1_ENABLE_R |= 0x0C;           // 11) Enable M1PWM2 and M1PWM3
 }
