@@ -58,7 +58,7 @@ int main(void){
     //Inits
     PLL_Init(); //set CPU clock to 80MHz
     PortF_Init();
-    //PortC_Init();
+    //PortC_Init();//do not call, something in here causes CPU to lock
     PWM_Init();
     ADC_Init();
     InitConsole();
