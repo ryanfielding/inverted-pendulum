@@ -23,7 +23,7 @@ B = [     0;
           0;
         m*l/den];
 C = [1 0 0 0;
-     0 0 1 0];
+     0 0 1 0]; %x and theta are measurable states (potentiometer and optical encoder)
 D = [0;
      0];
 
@@ -31,8 +31,16 @@ states = {'x' 'x_dot' 'phi' 'phi_dot'};
 inputs = {'u'};
 outputs = {'x'; 'phi'};
 
-sys_ss = ss(A,B,C,D,'statename',states,'inputname',inputs,'outputname',outputs)
-sys_tf = tf(sys_ss)
+sys_ss = ss(A,B,C,D,'statename',states,'inputname',inputs,'outputname',outputs);
+sys_tf = tf(sys_ss);
+poles = eig(A) %one in the right half plane, thus unstable
+
 co = ctrb(sys_ss);
-controllability = rank(co) %rank of 4 = num of states, thus controllable.
+ob = obsv(sys_ss);
+controllability = rank(co); %rank of 4 = num of states, thus controllable.
+observability = rank(ob); %rank of 4 = num states, thus observable.
+
+Ts = 1/100; %sample time for discrete model
+disc_sys = c2d(sys_ss, Ts, 'zoh') %convert continuous to discrete model
+
 
