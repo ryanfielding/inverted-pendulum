@@ -118,8 +118,8 @@ void PortF_Handler(void){
     PWM1_1_CMPA_R -= 0xC35;
     PWM1_1_CMPB_R -= 0xC35;
     if (PWM1_1_CMPA_R <= 0) {
-        PWM1_1_CMPA_R = 0x7A12;
-        PWM1_1_CMPB_R = 0x7A12;
+       PWM1_1_CMPA_R = 0x7A12;
+       PWM1_1_CMPB_R = 0x7A12;
     }
 }
 
@@ -168,7 +168,8 @@ void PWM_Init(void) {
                                           // drive pwmA LOW when counter matches comparator A
     PWM1_1_GENB_R = 0x80C;           // 6.3) drives pwmB HIGH when counter matches value in PWM1LOAD
                                           // drive pwmB LOW when counter matches comparator B
-    PWM1_1_LOAD_R = 10001 -1;        // 7) since target period is 100Hz, there are 10,000 clock ticks per period
+    //PWM1_1_LOAD_R = 10001 -1;        // 7) since target period is 100Hz, there are 10,000 clock ticks per period
+    PWM1_1_LOAD_R = 0x7A12;
     //PWM1_1_CMPA_R = 10000 -1;        // 8) set 0% duty cycle to PE4
     //PWM1_1_CMPB_R = 10000 -1;        // 9) set 0% duty cycle to PE5
     PWM1_1_CMPA_R = 0x7A12;
