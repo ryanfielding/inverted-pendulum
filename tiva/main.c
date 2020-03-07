@@ -34,7 +34,6 @@
 
 //Inits
 void PortF_Init(void);
-void PortC_Init(void);
 void PWM_Init(void);
 void ADC_Init(void);
 void InitConsole(void);
@@ -50,7 +49,8 @@ void MSDelay(unsigned int itime);
 void read_ADC(void);
 /* -----------------------      Global Variables        --------------------- */
 
-volatile signed long ComparatorValue = 5600;
+bool enc1;
+bool enc2;
 uint32_t pui32ADC0Value[1]; //data from ADC0
 
 /* -----------------------          Main Program        --------------------- */
@@ -58,16 +58,16 @@ int main(void){
     //Inits
     PLL_Init(); //set CPU clock to 80MHz
     PortF_Init();
-    //PortC_Init();//do not call, something in here causes CPU to lock
     PWM_Init();
     ADC_Init();
     InitConsole();
     // Display the setup on the terminal, View > Terminal
+    /*
     UARTprintf("ADC0 ->\n");
     UARTprintf("  Type: Potentiometer\n");
     UARTprintf("  Samples: One\n");
     UARTprintf("  Update Rate: 100ms\n");
-
+    */
 
     // Master interrupt enable func for all interrupts
     IntMasterEnable();
@@ -75,7 +75,11 @@ int main(void){
     while(1){
         read_ADC();
         MSDelay(100);
-
+        //UARTprintf("PB4 = %4d\r", pui32ADC0Value[0]," PB6 -> %1d\r", GPIO_PORTB_DATA_R & 0x40," PB7 -> %1d\r", GPIO_PORTB_DATA_R & 0x80);
+        enc1 = GPIO_PORTB_DATA_R & 0x40;
+        enc2 = GPIO_PORTB_DATA_R & 0x80;
+        UARTprintf("PB7 -> %4d\r", enc2);
+        //UARTprintf("PB7 -> %1d\r", GPIO_PORTB_DATA_R & 0x80, "m\n");
     }
 }
 
@@ -121,33 +125,6 @@ void PortF_Handler(void){
        PWM1_1_CMPA_R = 0x7A12;
        PWM1_1_CMPB_R = 0x7A12;
     }
-}
-
-/* Initialize PortC GPIOs */
-void PortC_Init(void) {
-    SYSCTL_RCGCGPIO_R |= 0x00000004; // (a) activate clock for port C
-    SYSCTL_RCGC2_R |= 0x00000004;           // activate clock for PortC
-    while ((SYSCTL_PRGPIO_R & 0x00000004) == 0)
-    {};                          // wait until PortC is ready
-    GPIO_PORTC_LOCK_R = 0x4C4F434B;         // unlock GPIO PortC
-    GPIO_PORTC_CR_R |= 0x0C;                 // allow changes to PC2,3
-    GPIO_PORTC_AMSEL_R &= 0x00;              // disable analog on PortC
-    GPIO_PORTC_PCTL_R &= ~0x0000FF00;         // use PC2,3 as GPIO
-    GPIO_PORTC_DIR_R &= ~0x0C;                // PC2,3 are inputs
-    GPIO_PORTC_AFSEL_R &= ~0x0C;              // disable alt function
-    GPIO_PORTC_PUR_R |= 0x0C;                // enable pull-up on PC2,3
-    GPIO_PORTC_DEN_R |= 0x0C;                // enable digital I/O on PC2,3
-
-    //Interrupts
-    /*
-    GPIO_PORTF_IS_R &= ~0x10;     // (d) PF4 is edge-sensitive
-    GPIO_PORTF_IBE_R &= ~0x10;    //     PF4 is not both edges
-    GPIO_PORTF_IEV_R &= ~0x10;    //     PF4 falling edge event
-    GPIO_PORTF_ICR_R = 0x10;      // (e) clear flag4
-    GPIO_PORTF_IM_R |= 0x10;      // (f) arm interrupt on PF4 *** No IME bit as mentioned in Book ***
-    NVIC_PRI7_R = (NVIC_PRI7_R & 0xFF00FFFF)|0x00A00000; // (g) priority 5
-    NVIC_EN0_R = 0x40000000;      // (h) enable interrupt 30 in NVIC for PF4 Handler
-    */
 }
 
 
@@ -215,33 +192,52 @@ void MSDelay(unsigned int itime){
 
 
 void ADC_Init(void){
-        SysCtlPeripheralEnable(SYSCTL_PERIPH_ADC0); //enable ADC0
-        SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOB); //enable GPIO B
-        GPIOPinTypeADC(GPIO_PORTB_BASE, GPIO_PIN_4); //PB4 as analog input
+    //PB4 as analog input
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_ADC0); //enable ADC0
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOB); //enable GPIO B
+    GPIOPinTypeADC(GPIO_PORTB_BASE, GPIO_PIN_4); //PB4 as analog input
+    //PB6,7 as digital inputs
+    GPIO_PORTB_CR_R |= 0xC0;                 // allow changes to PB6,7
+    GPIO_PORTB_DEN_R |= 0xC0;     //     enable digital I/O on PF4
+    GPIO_PORTB_PCTL_R &= ~0xFF000000; // configure PF4 as GPIO
+    //GPIO_PORTB_DIR_R &= ~0xC0;    // (c) make PF4 in (built-in button)
+    GPIOPinTypeGPIOInput(GPIO_PORTB_BASE, GPIO_PIN_6); //PB6 as input
+    GPIOPinTypeGPIOInput(GPIO_PORTB_BASE, GPIO_PIN_7); //PB7 as input
+    GPIO_PORTB_AFSEL_R &= ~0xC0;  //     disable alt funct on PF4
+    GPIO_PORTB_PDR_R |= 0xC0;     //     enable weak pull-downs
+    GPIOPadConfigSet(GPIO_PORTB_BASE, GPIO_PIN_6, GPIO_STRENGTH_2MA, GPIO_PIN_TYPE_STD_WPD);
+    GPIOPadConfigSet(GPIO_PORTB_BASE, GPIO_PIN_7, GPIO_STRENGTH_2MA, GPIO_PIN_TYPE_STD_WPD);
 
-        // Enable sample sequence 3 with a processor signal trigger.  Sequence 3
-        // will do a single sample when the processor sends a signal to start the
-        // conversion.  Each ADC module has 4 programmable sequences, sequence 0
-        // to sequence 3.  This example is arbitrarily using sequence 3.
-        ADCSequenceConfigure(ADC0_BASE, 3, ADC_TRIGGER_PROCESSOR, 0);
+    /*
+    GPIOPinTypeGPIOInput(GPIO_PORTB_BASE, GPIO_PIN_6); //PB6 as input
+    GPIOPinTypeGPIOInput(GPIO_PORTB_BASE, GPIO_PIN_7); //PB7 as input
+    GPIOPadConfigSet(GPIO_PORTB_BASE, GPIO_PIN_6, GPIO_STRENGTH_2MA, GPIO_PIN_TYPE_STD_WPD);
+    GPIOPadConfigSet(GPIO_PORTB_BASE, GPIO_PIN_7, GPIO_STRENGTH_2MA, GPIO_PIN_TYPE_STD_WPD); //enable pull down resistors
+    */
 
-        // Configure step 0 on sequence 3.  Sample channel 0 (ADC_CTL_CH0) in
-        // single-ended mode (default) and configure the interrupt flag
-        // (ADC_CTL_IE) to be set when the sample is done.  Tell the ADC logic
-        // that this is the last conversion on sequence 3 (ADC_CTL_END).  Sequence
-        // 3 has only one programmable step.  Sequence 1 and 2 have 4 steps, and
-        // sequence 0 has 8 programmable steps.  Since we are only doing a single
-        // conversion using sequence 3 we will only configure step 0.  For more
-        // information on the ADC sequences and steps, reference the datasheet.
-        ADCSequenceStepConfigure(ADC0_BASE, 3, 0, ADC_CTL_CH10 | ADC_CTL_IE |
-                                 ADC_CTL_END);
+    // Enable sample sequence 3 with a processor signal trigger.  Sequence 3
+    // will do a single sample when the processor sends a signal to start the
+    // conversion.  Each ADC module has 4 programmable sequences, sequence 0
+    // to sequence 3.  This example is arbitrarily using sequence 3.
+    ADCSequenceConfigure(ADC0_BASE, 3, ADC_TRIGGER_PROCESSOR, 0);
 
-        // Since sample sequence 3 is now configured, it must be enabled.
-        ADCSequenceEnable(ADC0_BASE, 3);
+    // Configure step 0 on sequence 3.  Sample channel 0 (ADC_CTL_CH0) in
+    // single-ended mode (default) and configure the interrupt flag
+    // (ADC_CTL_IE) to be set when the sample is done.  Tell the ADC logic
+    // that this is the last conversion on sequence 3 (ADC_CTL_END).  Sequence
+    // 3 has only one programmable step.  Sequence 1 and 2 have 4 steps, and
+    // sequence 0 has 8 programmable steps.  Since we are only doing a single
+    // conversion using sequence 3 we will only configure step 0.  For more
+    // information on the ADC sequences and steps, reference the datasheet.
+    ADCSequenceStepConfigure(ADC0_BASE, 3, 0, ADC_CTL_CH10 | ADC_CTL_IE |
+                             ADC_CTL_END);
 
-        // Clear the interrupt status flag.  This is done to make sure the
-        // interrupt flag is cleared before we sample.
-        ADCIntClear(ADC0_BASE, 3);
+    // Since sample sequence 3 is now configured, it must be enabled.
+    ADCSequenceEnable(ADC0_BASE, 3);
+
+    // Clear the interrupt status flag.  This is done to make sure the
+    // interrupt flag is cleared before we sample.
+    ADCIntClear(ADC0_BASE, 3);
 
 }
 
@@ -259,7 +255,7 @@ void read_ADC(void){
     ADCSequenceDataGet(ADC0_BASE, 3, pui32ADC0Value);
 
     // Display the AIN10 (PB4) digital value on the console.
-    UARTprintf("PB4 = %4d\r", pui32ADC0Value[0],"\n");
+    //UARTprintf("PB4 = %4d\r", pui32ADC0Value[0],"\n");
 }
 
 

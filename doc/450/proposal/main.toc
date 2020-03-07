@@ -1,32 +1,6 @@
-\contentsline {section}{\numberline {1}Team Information}{5}{section.1}
-\contentsline {subsection}{\numberline {1.1}Team Roles}{5}{subsection.1.1}
-\contentsline {subsection}{\numberline {1.2}About the Team}{6}{subsection.1.2}
-\contentsline {subsubsection}{\numberline {1.2.1}Harki}{6}{subsubsection.1.2.1}
-\contentsline {subsubsection}{\numberline {1.2.2}Aarij}{6}{subsubsection.1.2.2}
-\contentsline {subsubsection}{\numberline {1.2.3}Rachel}{6}{subsubsection.1.2.3}
-\contentsline {subsubsection}{\numberline {1.2.4}Ryan}{7}{subsubsection.1.2.4}
-\contentsline {section}{\numberline {2}The Project}{7}{section.2}
-\contentsline {subsection}{\numberline {2.1}Description}{7}{subsection.2.1}
-\contentsline {subsection}{\numberline {2.2}Agile Roadmap}{7}{subsection.2.2}
-\contentsline {section}{\numberline {3}Sprint Update}{8}{section.3}
-\contentsline {subsection}{\numberline {3.1}Vision Repository}{9}{subsection.3.1}
-\contentsline {subsubsection}{\numberline {3.1.1}Algorithm Research}{10}{subsubsection.3.1.1}
-\contentsline {subsection}{\numberline {3.2}Controls Repository}{14}{subsection.3.2}
-\contentsline {subsection}{\numberline {3.3}Robotics Repository}{14}{subsection.3.3}
-\contentsline {subsection}{\numberline {3.4}Sprint User Stories}{15}{subsection.3.4}
-\contentsline {subsubsection}{\numberline {3.4.1}Technical Requirements}{15}{subsubsection.3.4.1}
-\contentsline {subsubsection}{\numberline {3.4.2}Table of Issues}{16}{subsubsection.3.4.2}
-\contentsline {subsection}{\numberline {3.5}Lessons Learned}{19}{subsection.3.5}
-\contentsline {subsubsection}{\numberline {3.5.1}What Went Right}{19}{subsubsection.3.5.1}
-\contentsline {subsubsection}{\numberline {3.5.2}What Went Wrong}{20}{subsubsection.3.5.2}
-\contentsline {subsubsection}{\numberline {3.5.3}Future Improvements}{20}{subsubsection.3.5.3}
-\contentsline {section}{\numberline {4}Budget Tracking}{20}{section.4}
-\contentsline {section}{\numberline {5}Milestones (KPI's)}{21}{section.5}
-\contentsline {subsection}{\numberline {5.1}Vision}{21}{subsection.5.1}
-\contentsline {subsection}{\numberline {5.2}Robotics}{21}{subsection.5.2}
-\contentsline {subsection}{\numberline {5.3}Controls}{22}{subsection.5.3}
-\contentsline {section}{\numberline {6}Next Sprint Plan}{24}{section.6}
-\contentsline {subsection}{\numberline {6.1}Vision}{24}{subsection.6.1}
-\contentsline {subsection}{\numberline {6.2}Robotics}{25}{subsection.6.2}
-\contentsline {subsection}{\numberline {6.3}Controls}{26}{subsection.6.3}
-\contentsline {subsection}{\numberline {6.4}Integration}{27}{subsection.6.4}
+\contentsline {section}{\numberline {1}Introduction}{4}{section.1}
+\contentsline {section}{\numberline {2}Design Goals and Objectives}{4}{section.2}
+\contentsline {section}{\numberline {3}Requirements and Methods}{4}{section.3}
+\contentsline {section}{\numberline {4}Platform and Tools}{4}{section.4}
+\contentsline {section}{\numberline {5}Implementation Plan and Timeline}{4}{section.5}
+\contentsline {section}{\numberline {6}Conclusions}{4}{section.6}
