@@ -1,6 +1,0 @@
-\contentsline {section}{\numberline {1}Introduction}{4}{section.1}
-\contentsline {section}{\numberline {2}Design Goals and Objectives}{4}{section.2}
-\contentsline {section}{\numberline {3}Requirements and Methods}{4}{section.3}
-\contentsline {section}{\numberline {4}Platform and Tools}{4}{section.4}
-\contentsline {section}{\numberline {5}Implementation Plan and Timeline}{4}{section.5}
-\contentsline {section}{\numberline {6}Conclusions}{4}{section.6}

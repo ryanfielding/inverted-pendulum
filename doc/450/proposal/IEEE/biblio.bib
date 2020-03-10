@@ -8,6 +8,8 @@ for current contact information.
 This is an example BibTeX database for the official IEEEtran.bst
 BibTeX style file.
 
+\newcommand{\comment}[1]{}
+
 Some entries call strings that are defined in the IEEEabrv.bib file.
 Therefore, IEEEabrv.bib should be loaded prior to this file. 
 Usage: 
@@ -62,11 +64,42 @@ full names.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
 %%%%% ADD CITATIONS HERE %%%%%%%
 
-@manual{exp,
-    title     = "Expense Tracking Template",
-    institution = "Vertex42",
-    URL      = "https://www.vertex42.com/Files/download2/themed.php?file=expense-tracking.xlsx"
+@manual{inv,
+    title     = "Inverted Pendulum: System Modelling",
+    institution = "University of Michigan",
+    URL      = "http://ctms.engin.umich.edu/CTMS/index.php?example=InvertedPendulum&section=SystemModeling"
     }
+@manual{inv2,
+    title     = "Inverted Pendulum: State-Space Methods for Controller Design",
+    institution = "University of Michigan",
+    URL      = "http://ctms.engin.umich.edu/CTMS/index.php?example=InvertedPendulum&section=ControlStateSpace"
+    }
+@manual{OCLoop,
+    title     = "OPEN LOOP AND CLOSED LOOP SYSTEMS",
+    institution = "Precision Electronic Services, Inc.",
+    URL      = "https://www.pesquality.com/blog/open-loop-and-closed-loop-systems"
+    }
+ 
+ @manual{quadref,
+    title     = "Quadrature Encoder Overview",
+    institution = "Dynapar",
+    URL      = "https://www.dynapar.com/technology/encoder_basics/quadrature_encoder/"
+    }   
+
+@manual{github,
+    title     = "Inverted Pendulum Github Repository",
+    author       = {Ryan Fielding and Rachel George},
+    institution = "Github",
+    URL      = "https://github.com/ryanfielding/inverted-pendulum"
+    } 
+@manual{StateSpace,
+    title     = "Chapter 2: System Modelling",
+    institution = "Caltech",
+    URL      = "https://www.cds.caltech.edu/~murray/courses/cds101/fa04/caltech/am04_ch2-3oct04.pdf"
+    }
+    
+
+
 
 example of a IEEEtran control entry which can change some IEEEtran.bst
 settings. An entry like this must be cited via \bstctlcite{} command
