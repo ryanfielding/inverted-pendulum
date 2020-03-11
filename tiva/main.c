@@ -61,24 +61,16 @@ int main(void){
     PWM_Init();
     ADC_Init();
     InitConsole();
-    // Display the setup on the terminal, View > Terminal
-    /*
-    UARTprintf("ADC0 ->\n");
-    UARTprintf("  Type: Potentiometer\n");
-    UARTprintf("  Samples: One\n");
-    UARTprintf("  Update Rate: 100ms\n");
-    */
 
-    // Master interrupt enable func for all interrupts
+    // Master interrupt enable function for all interrupts
     IntMasterEnable();
     enable_interrupts();
     while(1){
-        read_ADC();
         MSDelay(100);
-        //UARTprintf("PB4 = %4d\r", pui32ADC0Value[0]," PB6 -> %1d\r", GPIO_PORTB_DATA_R & 0x40," PB7 -> %1d\r", GPIO_PORTB_DATA_R & 0x80);
-        enc1 = GPIO_PORTB_DATA_R & 0x40;
-        enc2 = GPIO_PORTB_DATA_R & 0x80;
-        UARTprintf("PB7 -> %4d\r", enc2);
+        read_ADC();
+        UARTprintf("PB4 = %4d\r", pui32ADC0Value[0]);
+
+        //UARTprintf("PB7 -> %4d\r", enc2);
         //UARTprintf("PB7 -> %1d\r", GPIO_PORTB_DATA_R & 0x80, "m\n");
     }
 }
@@ -109,22 +101,17 @@ void PortF_Init(void) {
 }
 
 void PortF_Handler(void){
-    /*MSDelay (100);
-    GPIO_PORTF_ICR_R = 0x10;
-    ComparatorValue -= 1000;
-        if (ComparatorValue < 0){
-            ComparatorValue = 10000; // reload to 10000 if it's less than 0
-            PWM1_1_CMPA_R = abs(ComparatorValue - 1); // update comparatorA value
-            PWM1_1_CMPB_R = abs(ComparatorValue - 1); // update comparatorB value
-        }*/
+
     MSDelay (100);
     GPIO_PORTF_ICR_R = 0x10;
+
     PWM1_1_CMPA_R -= 0xC35;
     PWM1_1_CMPB_R -= 0xC35;
     if (PWM1_1_CMPA_R <= 0) {
        PWM1_1_CMPA_R = 0x7A12;
        PWM1_1_CMPB_R = 0x7A12;
     }
+
 }
 
 
