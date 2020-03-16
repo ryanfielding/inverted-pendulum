@@ -51,8 +51,8 @@ void MSDelay(unsigned int itime);
 void read_ADC(void);
 /* -----------------------      Global Variables        --------------------- */
 
-bool enc1;
-bool enc2;
+bool encA;
+bool encB;
 uint32_t pui32ADC0Value[1]; //data from ADC0
 volatile signed long pos = 0; //Cart position counter
 
@@ -72,12 +72,8 @@ int main(void){
     while(1){
         MSDelay(100);
         read_ADC();
-        //UARTprintf("PB4 = %4d\r", pui32ADC0Value[0]);
 
-        //UARTprintf("PB7 -> %4d\r", enc2);
-        enc1 = GPIO_PORTB_DATA_R & 0x80; //Channel A
-        enc2 = GPIO_PORTB_DATA_R & 0x40; //Channel B
-        UARTprintf("PB7 -> %d\r", enc1, " PB6 -> %d\r", enc2, "m\n");
+
     }
 }
 
@@ -115,11 +111,11 @@ void PortB_Init(void){
     GPIOPinTypeGPIOInput(GPIO_PORTB_BASE, GPIO_PIN_7); //PB7 as input
     GPIO_PORTB_AFSEL_R &= ~0xC0;  //     disable alt funct on PB7&6
 
-    GPIO_PORTB_IS_R &= ~0xC0;     // (d) PB7&6 is edge-sensitive
-    GPIO_PORTB_IBE_R &= ~0xC0;    //     PB7&6 is not both edges
-    GPIO_PORTB_IEV_R |= 0xC0;    //     PB7&6 rising edge event
-    GPIO_PORTB_ICR_R = 0xC0;      // (e) clear flag7&6
-    GPIO_PORTB_IM_R |= 0xC0;      // (f) arm interrupt on PB7&6 *** No IME bit as mentioned in Book ***
+    GPIO_PORTB_IS_R &= ~0x80;     // (d) PB7 is edge-sensitive
+    GPIO_PORTB_IBE_R &= ~0x80;    //     PB7 is not both edges
+    GPIO_PORTB_IEV_R |= 0x80;    //     PB7 rising edge event
+    GPIO_PORTB_ICR_R = 0x80;      // (e) clear flag7
+    GPIO_PORTB_IM_R |= 0x80;      // (f) arm interrupt on PB7 *** No IME bit as mentioned in Book ***
 
     NVIC_PRI0_R = (NVIC_PRI0_R & 0xFFFF00FF)|0x00009000; // (g) priority 4 for interrupt 1
     NVIC_EN0_R |= 0x00000002;      // (h) enable interrupt 1 in NVIC for PB Handler
@@ -130,19 +126,25 @@ void PortF_Handler(void){
     MSDelay (100);
     GPIO_PORTF_ICR_R = 0x10;
 
-    PWM1_1_CMPA_R -= 0xC35;
-    PWM1_1_CMPB_R -= 0xC35;
+    PWM1_1_CMPA_R -= 100;
+    PWM1_1_CMPB_R -= 100;
     if (PWM1_1_CMPA_R <= 0) {
-       PWM1_1_CMPA_R = 0x7A12;
-       PWM1_1_CMPB_R = 0x7A12;
+       PWM1_1_CMPA_R = 1000;
+       PWM1_1_CMPB_R = 1000;
     }
 
 }
-void PortB_Handler(void){
-    GPIO_PORTB_ICR_R = 0xC0;
 
-    enc1 = GPIO_PORTB_DATA_R & 0x80; //Channel A
-    enc2 = GPIO_PORTB_DATA_R & 0x40; //Channel B
+void PortB_Handler(void){
+    GPIO_PORTB_ICR_R = 0xC0; //Clear interrupt flag
+
+    if(GPIO_PORTB_DATA_R & 0x40){
+        pos -= 1;
+    }
+    else {
+        pos += 1;
+    }
+
 }
 
 void PWM_Init(void) {
@@ -162,12 +164,9 @@ void PWM_Init(void) {
                                           // drive pwmA LOW when counter matches comparator A
     PWM1_1_GENB_R = 0x80C;           // 6.3) drives pwmB HIGH when counter matches value in PWM1LOAD
                                           // drive pwmB LOW when counter matches comparator B
-    //PWM1_1_LOAD_R = 10001 -1;        // 7) since target period is 100Hz, there are 10,000 clock ticks per period
-    PWM1_1_LOAD_R = 0x7A12;
-    //PWM1_1_CMPA_R = 10000 -1;        // 8) set 0% duty cycle to PE4
-    //PWM1_1_CMPB_R = 10000 -1;        // 9) set 0% duty cycle to PE5
-    PWM1_1_CMPA_R = 0x7A12;
-    PWM1_1_CMPB_R  = 0x7A12;
+    PWM1_1_LOAD_R = 1000;
+    PWM1_1_CMPA_R = 1000;
+    PWM1_1_CMPB_R  = 1000;
     PWM1_1_CTL_R |= 0x01;            // 10) start the timers in PWM generator 1 by enabling the PWM clock
     PWM1_ENABLE_R |= 0x0C;           // 11) Enable M1PWM2 and M1PWM3
 }
