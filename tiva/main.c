@@ -37,12 +37,14 @@ void PortF_Init(void);
 void PWM_Init(void);
 void ADC_Init(void);
 void InitConsole(void);
+void PortB_Init(void);
 
 //Interrupts, ISRs
 void disable_interrupts(void);
 void enable_interrupts(void);
 void wait_for_interrupts(void);
 void PortF_Handler(void);
+void PortB_Handler(void);
 
 //Other
 void MSDelay(unsigned int itime);
@@ -52,6 +54,7 @@ void read_ADC(void);
 bool enc1;
 bool enc2;
 uint32_t pui32ADC0Value[1]; //data from ADC0
+volatile signed long pos = 0; //Cart position counter
 
 /* -----------------------          Main Program        --------------------- */
 int main(void){
@@ -60,6 +63,7 @@ int main(void){
     PortF_Init();
     PWM_Init();
     ADC_Init();
+    PortB_Init();
     InitConsole();
 
     // Master interrupt enable function for all interrupts
@@ -68,10 +72,12 @@ int main(void){
     while(1){
         MSDelay(100);
         read_ADC();
-        UARTprintf("PB4 = %4d\r", pui32ADC0Value[0]);
+        //UARTprintf("PB4 = %4d\r", pui32ADC0Value[0]);
 
         //UARTprintf("PB7 -> %4d\r", enc2);
-        //UARTprintf("PB7 -> %1d\r", GPIO_PORTB_DATA_R & 0x80, "m\n");
+        enc1 = GPIO_PORTB_DATA_R & 0x80; //Channel A
+        enc2 = GPIO_PORTB_DATA_R & 0x40; //Channel B
+        UARTprintf("PB7 -> %d\r", enc1, " PB6 -> %d\r", enc2, "m\n");
     }
 }
 
@@ -97,7 +103,26 @@ void PortF_Init(void) {
     GPIO_PORTF_ICR_R = 0x10;      // (e) clear flag4
     GPIO_PORTF_IM_R |= 0x10;      // (f) arm interrupt on PF4 *** No IME bit as mentioned in Book ***
     NVIC_PRI7_R = (NVIC_PRI7_R & 0xFF00FFFF)|0x00A00000; // (g) priority 5
-    NVIC_EN0_R = 0x40000000;      // (h) enable interrupt 30 in NVIC for PF4 Handler
+    NVIC_EN0_R |= 0x40000000;      // (h) enable interrupt 30 in NVIC for PF Handler
+}
+void PortB_Init(void){
+
+    GPIO_PORTB_CR_R |= 0xC0;                 // allow changes to PB6,7
+    GPIO_PORTB_DEN_R |= 0xC0;     //     enable digital I/O on PF4
+    GPIO_PORTB_PCTL_R &= ~0xFF000000; // configure PF4 as GPIO
+    //GPIO_PORTB_DIR_R &= ~0xC0;    // (c) make PF4 in (built-in button)
+    GPIOPinTypeGPIOInput(GPIO_PORTB_BASE, GPIO_PIN_6); //PB6 as input
+    GPIOPinTypeGPIOInput(GPIO_PORTB_BASE, GPIO_PIN_7); //PB7 as input
+    GPIO_PORTB_AFSEL_R &= ~0xC0;  //     disable alt funct on PB7&6
+
+    GPIO_PORTB_IS_R &= ~0xC0;     // (d) PB7&6 is edge-sensitive
+    GPIO_PORTB_IBE_R &= ~0xC0;    //     PB7&6 is not both edges
+    GPIO_PORTB_IEV_R |= 0xC0;    //     PB7&6 rising edge event
+    GPIO_PORTB_ICR_R = 0xC0;      // (e) clear flag7&6
+    GPIO_PORTB_IM_R |= 0xC0;      // (f) arm interrupt on PB7&6 *** No IME bit as mentioned in Book ***
+
+    NVIC_PRI0_R = (NVIC_PRI0_R & 0xFFFF00FF)|0x00009000; // (g) priority 4 for interrupt 1
+    NVIC_EN0_R |= 0x00000002;      // (h) enable interrupt 1 in NVIC for PB Handler
 }
 
 void PortF_Handler(void){
@@ -113,7 +138,12 @@ void PortF_Handler(void){
     }
 
 }
+void PortB_Handler(void){
+    GPIO_PORTB_ICR_R = 0xC0;
 
+    enc1 = GPIO_PORTB_DATA_R & 0x80; //Channel A
+    enc2 = GPIO_PORTB_DATA_R & 0x40; //Channel B
+}
 
 void PWM_Init(void) {
     SYSCTL_RCGCPWM_R |= 0x02;     // 1) enable PWM1 clock
@@ -184,13 +214,7 @@ void ADC_Init(void){
     SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOB); //enable GPIO B
     GPIOPinTypeADC(GPIO_PORTB_BASE, GPIO_PIN_4); //PB4 as analog input
     //PB6,7 as digital inputs
-    GPIO_PORTB_CR_R |= 0xC0;                 // allow changes to PB6,7
-    GPIO_PORTB_DEN_R |= 0xC0;     //     enable digital I/O on PF4
-    GPIO_PORTB_PCTL_R &= ~0xFF000000; // configure PF4 as GPIO
-    //GPIO_PORTB_DIR_R &= ~0xC0;    // (c) make PF4 in (built-in button)
-    GPIOPinTypeGPIOInput(GPIO_PORTB_BASE, GPIO_PIN_6); //PB6 as input
-    GPIOPinTypeGPIOInput(GPIO_PORTB_BASE, GPIO_PIN_7); //PB7 as input
-    GPIO_PORTB_AFSEL_R &= ~0xC0;  //     disable alt funct on PF4
+
     //GPIO_PORTB_PUR_R |= 0xC0;     //     enable weak pull-up
     //GPIO_PORTB_PDR_R |= 0xC0;
     //GPIOPadConfigSet(GPIO_PORTB_BASE, GPIO_PIN_6, GPIO_STRENGTH_2MA, GPIO_PIN_TYPE_STD_WPD);
