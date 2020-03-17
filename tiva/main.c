@@ -48,7 +48,7 @@ void PortB_Handler(void);
 
 //Other
 void MSDelay(unsigned int itime);
-void read_ADC(void);
+long read_ADC(void);
 /* -----------------------      Global Variables        --------------------- */
 
 bool encA;
@@ -57,10 +57,12 @@ uint32_t pui32ADC0Value[1]; //data from ADC0
 volatile signed long pos = 0; //Cart position counter
 volatile signed long dc = 49999; //0% duty cycle
 volatile signed long integral = 0;
-volatile signed long target = 400;
+volatile signed long theta_target = 0;
+volatile signed long theta = 0;
 volatile signed long derivative = 0;
 volatile signed long last_err = 0;
-volatile bool run = true;
+
+volatile bool run = false;
 /* -----------------------          Main Program        --------------------- */
 int main(void){
     //Inits
@@ -76,15 +78,17 @@ int main(void){
     enable_interrupts();
     while(1){
 
-        while(run){
-            //MSDelay(100);
-            //read_ADC();
+        theta = read_ADC();
 
-            //PID controller for cart
-            //want to move cart to x=100
-            //integral += target - pos;
-            derivative = (target - pos) - last_err;
-            dc = 255*(target - pos) + 0.001*integral + 2*derivative;
+        while(run & pos < 500 & pos > -500){
+
+            theta = read_ADC();
+
+            //PID controller for inverted pendulum
+
+            //integral += theta_target - theta;
+            //derivative = (theta_target - theta) - last_err;
+            dc = -400*(theta_target - theta) + 0.001*integral + 2*derivative;
             if (dc > 0 & dc < 50000){
                 PWM1_1_CMPA_R = 49999; //0% dc
                 PWM1_1_CMPB_R = 50000 - dc;
@@ -103,7 +107,7 @@ int main(void){
                 PWM1_1_CMPB_R = 49999;
             }
             //UARTprintf("PB4 = %4d\r", dc,"\n");
-            last_err = (target - pos);
+            last_err = (theta_target - pos);
         }
         //if PF4 pushed, stop.
         PWM1_1_CMPB_R = 49999;
@@ -157,11 +161,12 @@ void PortB_Init(void){
 
 void PortF_Handler(void){
 
-    MSDelay(500);//debounce
+    MSDelay(800);//debounce
     GPIO_PORTF_ICR_R = 0x10;
     run = !run;
     if (run){
-        target = -target;
+        //hold pendulum vertical when PF4 pushed to start controller
+        theta_target = theta;
     }
 
     /*PWM1_1_CMPA_R -= 5000;
@@ -292,7 +297,7 @@ void ADC_Init(void){
 
 }
 
-void read_ADC(void){
+long read_ADC(void){
     //Trigger the conversion
     ADCProcessorTrigger(ADC0_BASE, 3);
 
@@ -304,6 +309,7 @@ void read_ADC(void){
 
     // Read ADC Value.
     ADCSequenceDataGet(ADC0_BASE, 3, pui32ADC0Value);
+    return pui32ADC0Value[0];
 
     // Display the AIN10 (PB4) digital value on the console.
     //UARTprintf("PB4 = %4d\r", pui32ADC0Value[0],"\n");
