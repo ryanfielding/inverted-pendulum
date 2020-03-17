@@ -57,7 +57,9 @@ uint32_t pui32ADC0Value[1]; //data from ADC0
 volatile signed long pos = 0; //Cart position counter
 volatile signed long dc = 49999; //0% duty cycle
 volatile signed long integral = 0;
-volatile signed long target = -200;
+volatile signed long target = 400;
+volatile signed long derivative = 0;
+volatile signed long last_err = 0;
 volatile bool run = true;
 /* -----------------------          Main Program        --------------------- */
 int main(void){
@@ -78,24 +80,30 @@ int main(void){
             //MSDelay(100);
             //read_ADC();
 
-            //PI controller for cart
+            //PID controller for cart
             //want to move cart to x=100
-            integral += target - pos;
-            dc = 200*(target - pos) + 0.01*integral;
-            if (dc > 0){
+            //integral += target - pos;
+            derivative = (target - pos) - last_err;
+            dc = 255*(target - pos) + 0.001*integral + 2*derivative;
+            if (dc > 0 & dc < 50000){
                 PWM1_1_CMPA_R = 49999; //0% dc
                 PWM1_1_CMPB_R = 50000 - dc;
 
             }
-            else if (dc > 50000 | dc < -50000){
-                run = false;
+            else if (dc >= 50000){
+                PWM1_1_CMPA_R = 49999; //0% dc
+                PWM1_1_CMPB_R = 0;
+            }
+            else if (dc <= -50000){
+                PWM1_1_CMPA_R = 0;
+                PWM1_1_CMPB_R = 49999;
             }
             else{
                 PWM1_1_CMPA_R = 50000 + dc;
                 PWM1_1_CMPB_R = 49999;
             }
             //UARTprintf("PB4 = %4d\r", dc,"\n");
-
+            last_err = (target - pos);
         }
         //if PF4 pushed, stop.
         PWM1_1_CMPB_R = 49999;
@@ -149,7 +157,7 @@ void PortB_Init(void){
 
 void PortF_Handler(void){
 
-    //MSDelay (100);
+    MSDelay(500);//debounce
     GPIO_PORTF_ICR_R = 0x10;
     run = !run;
     if (run){
