@@ -55,7 +55,10 @@ bool encA;
 bool encB;
 uint32_t pui32ADC0Value[1]; //data from ADC0
 volatile signed long pos = 0; //Cart position counter
-
+volatile signed long dc = 49999; //0% duty cycle
+volatile signed long integral = 0;
+volatile signed long target = -200;
+volatile bool run = true;
 /* -----------------------          Main Program        --------------------- */
 int main(void){
     //Inits
@@ -70,10 +73,33 @@ int main(void){
     IntMasterEnable();
     enable_interrupts();
     while(1){
-        MSDelay(100);
-        read_ADC();
 
+        while(run){
+            //MSDelay(100);
+            //read_ADC();
 
+            //PI controller for cart
+            //want to move cart to x=100
+            integral += target - pos;
+            dc = 200*(target - pos) + 0.01*integral;
+            if (dc > 0){
+                PWM1_1_CMPA_R = 49999; //0% dc
+                PWM1_1_CMPB_R = 50000 - dc;
+
+            }
+            else if (dc > 50000 | dc < -50000){
+                run = false;
+            }
+            else{
+                PWM1_1_CMPA_R = 50000 + dc;
+                PWM1_1_CMPB_R = 49999;
+            }
+            //UARTprintf("PB4 = %4d\r", dc,"\n");
+
+        }
+        //if PF4 pushed, stop.
+        PWM1_1_CMPB_R = 49999;
+        PWM1_1_CMPA_R = 49999;
     }
 }
 
@@ -123,15 +149,21 @@ void PortB_Init(void){
 
 void PortF_Handler(void){
 
-    MSDelay (100);
+    //MSDelay (100);
     GPIO_PORTF_ICR_R = 0x10;
-
-    PWM1_1_CMPA_R -= 100;
-    PWM1_1_CMPB_R -= 100;
-    if (PWM1_1_CMPA_R <= 0) {
-       PWM1_1_CMPA_R = 1000;
-       PWM1_1_CMPB_R = 1000;
+    run = !run;
+    if (run){
+        target = -target;
     }
+
+    /*PWM1_1_CMPA_R -= 5000;
+    PWM1_1_CMPB_R -= 5000;
+    if (PWM1_1_CMPA_R <= 0) {
+       PWM1_1_CMPA_R = 50000;
+       PWM1_1_CMPB_R = 50000;
+    }
+    //PWM1_1_CMPB_R = 999; //DC 0%
+     */
 
 }
 
@@ -164,9 +196,9 @@ void PWM_Init(void) {
                                           // drive pwmA LOW when counter matches comparator A
     PWM1_1_GENB_R = 0x80C;           // 6.3) drives pwmB HIGH when counter matches value in PWM1LOAD
                                           // drive pwmB LOW when counter matches comparator B
-    PWM1_1_LOAD_R = 1000;
-    PWM1_1_CMPA_R = 1000;
-    PWM1_1_CMPB_R  = 1000;
+    PWM1_1_LOAD_R = 50000;
+    PWM1_1_CMPA_R = 50000;
+    PWM1_1_CMPB_R  = 50000;
     PWM1_1_CTL_R |= 0x01;            // 10) start the timers in PWM generator 1 by enabling the PWM clock
     PWM1_ENABLE_R |= 0x0C;           // 11) Enable M1PWM2 and M1PWM3
 }
