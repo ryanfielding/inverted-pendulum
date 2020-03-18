@@ -49,6 +49,7 @@ void PortB_Handler(void);
 //Other
 void MSDelay(unsigned int itime);
 long read_ADC(void);
+long movinAvg(void);
 /* -----------------------      Global Variables        --------------------- */
 
 bool encA;
@@ -62,6 +63,9 @@ volatile signed long theta = 0;
 volatile signed long derivative = 0;
 volatile signed long last_err = 0;
 
+const int moving_avg_size = 5;
+long thetas[moving_avg_size];
+
 volatile bool run = false;
 /* -----------------------          Main Program        --------------------- */
 int main(void){
@@ -73,22 +77,24 @@ int main(void){
     PortB_Init();
     InitConsole();
 
+
     // Master interrupt enable function for all interrupts
     IntMasterEnable();
     enable_interrupts();
     while(1){
 
-        theta = read_ADC();
+        //monitor theta
+        theta = movinAvg();
 
-        while(run & pos < 500 & pos > -500){
+        while(run & pos < 700 & pos > -700){
 
-            theta = read_ADC();
+            theta = movinAvg();
 
             //PID controller for inverted pendulum
 
             //integral += theta_target - theta;
             //derivative = (theta_target - theta) - last_err;
-            dc = -400*(theta_target - theta) + 0.001*integral + 2*derivative;
+            dc = -800*(theta_target - theta) + 0.001*integral + 2*derivative;
             if (dc > 0 & dc < 50000){
                 PWM1_1_CMPA_R = 49999; //0% dc
                 PWM1_1_CMPB_R = 50000 - dc;
@@ -142,9 +148,8 @@ void PortF_Init(void) {
 void PortB_Init(void){
 
     GPIO_PORTB_CR_R |= 0xC0;                 // allow changes to PB6,7
-    GPIO_PORTB_DEN_R |= 0xC0;     //     enable digital I/O on PF4
-    GPIO_PORTB_PCTL_R &= ~0xFF000000; // configure PF4 as GPIO
-    //GPIO_PORTB_DIR_R &= ~0xC0;    // (c) make PF4 in (built-in button)
+    GPIO_PORTB_DEN_R |= 0xC0;     //     enable digital I/O on PFB6,7
+    GPIO_PORTB_PCTL_R &= ~0xFF000000; // configure PB 6,7 as GPIO
     GPIOPinTypeGPIOInput(GPIO_PORTB_BASE, GPIO_PIN_6); //PB6 as input
     GPIOPinTypeGPIOInput(GPIO_PORTB_BASE, GPIO_PIN_7); //PB7 as input
     GPIO_PORTB_AFSEL_R &= ~0xC0;  //     disable alt funct on PB7&6
@@ -181,12 +186,12 @@ void PortF_Handler(void){
 }
 
 void PortB_Handler(void){
-    GPIO_PORTB_ICR_R = 0xC0; //Clear interrupt flag
+    GPIO_PORTB_ICR_R = 0x80; //Clear interrupt flag
 
     if(GPIO_PORTB_DATA_R & 0x40){
         pos -= 1;
     }
-    else {
+    else{
         pos += 1;
     }
 
@@ -313,6 +318,23 @@ long read_ADC(void){
 
     // Display the AIN10 (PB4) digital value on the console.
     //UARTprintf("PB4 = %4d\r", pui32ADC0Value[0],"\n");
+}
+
+long movinAvg(void){
+    //Variables
+
+    int i = 0;
+    long sum = 0;
+
+    sum = 0;
+    for(i = moving_avg_size-1; i > 0; --i){
+        thetas[i] = thetas[i-1];
+        sum += thetas[i];
+    }
+    thetas[0] = read_ADC();
+    sum += thetas[0];
+    return sum/moving_avg_size;
+
 }
 
 
