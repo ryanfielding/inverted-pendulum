@@ -25,6 +25,7 @@
 #include "driverlib/ssi.h"
 #include "driverlib/systick.h"
 #include "driverlib/adc.h"
+#include "driverlib/qei.h"
 #include "utils/uartstdio.h"
 #include "utils/uartstdio.c"
 #include <string.h>
@@ -37,7 +38,7 @@ void PortF_Init(void);
 void PWM_Init(void);
 void ADC_Init(void);
 void InitConsole(void);
-void PortB_Init(void);
+void QEI_Init(void);
 
 //Interrupts, ISRs
 void disable_interrupts(void);
@@ -74,19 +75,18 @@ int main(void){
     PortF_Init();
     PWM_Init();
     ADC_Init();
-    PortB_Init();
     InitConsole();
-
+    QEI_Init(); //Pins PD6,7 for quadrature encoder ch. A, B
 
     // Master interrupt enable function for all interrupts
     IntMasterEnable();
     enable_interrupts();
     while(1){
-
+        pos = QEIPositionGet(QEI0_BASE);
         //monitor theta
         theta = movinAvg();
 
-        while(run & pos < 700 & pos > -700){
+        while(run & pos < 13000 & pos > 7000){
 
             theta = movinAvg();
 
@@ -145,23 +145,37 @@ void PortF_Init(void) {
     NVIC_PRI7_R = (NVIC_PRI7_R & 0xFF00FFFF)|0x00A00000; // (g) priority 5
     NVIC_EN0_R |= 0x40000000;      // (h) enable interrupt 30 in NVIC for PF Handler
 }
-void PortB_Init(void){
 
-    GPIO_PORTB_CR_R |= 0xC0;                 // allow changes to PB6,7
-    GPIO_PORTB_DEN_R |= 0xC0;     //     enable digital I/O on PFB6,7
-    GPIO_PORTB_PCTL_R &= ~0xFF000000; // configure PB 6,7 as GPIO
-    GPIOPinTypeGPIOInput(GPIO_PORTB_BASE, GPIO_PIN_6); //PB6 as input
-    GPIOPinTypeGPIOInput(GPIO_PORTB_BASE, GPIO_PIN_7); //PB7 as input
-    GPIO_PORTB_AFSEL_R &= ~0xC0;  //     disable alt funct on PB7&6
+void QEI_Init(void){
 
-    GPIO_PORTB_IS_R &= ~0x80;     // (d) PB7 is edge-sensitive
-    GPIO_PORTB_IBE_R &= ~0x80;    //     PB7 is not both edges
-    GPIO_PORTB_IEV_R |= 0x80;    //     PB7 rising edge event
-    GPIO_PORTB_ICR_R = 0x80;      // (e) clear flag7
-    GPIO_PORTB_IM_R |= 0x80;      // (f) arm interrupt on PB7 *** No IME bit as mentioned in Book ***
+    // Enable QEI Peripherals
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOD);
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_QEI0);
 
-    NVIC_PRI0_R = (NVIC_PRI0_R & 0xFFFF00FF)|0x00009000; // (g) priority 4 for interrupt 1
-    NVIC_EN0_R |= 0x00000002;      // (h) enable interrupt 1 in NVIC for PB Handler
+    //Unlock GPIOD7 - Like PF0 its used for NMI - Without this step it doesn't work
+    HWREG(GPIO_PORTD_BASE + GPIO_O_LOCK) = GPIO_LOCK_KEY; //In Tiva include this is the same as "_DD" in older versions (0x4C4F434B)
+    HWREG(GPIO_PORTD_BASE + GPIO_O_CR) |= 0x80;
+    HWREG(GPIO_PORTD_BASE + GPIO_O_LOCK) = 0;
+
+    //Set Pins to be PHA0 and PHB0
+    GPIOPinConfigure(GPIO_PD6_PHA0);
+    GPIOPinConfigure(GPIO_PD7_PHB0);
+
+    //Set GPIO pins for QEI. PhA0 -> PD6, PhB0 ->PD7. I believe this sets the pull up and makes them inputs
+    GPIOPinTypeQEI(GPIO_PORTD_BASE, GPIO_PIN_6 |  GPIO_PIN_7);
+
+    //DISable peripheral and int before configuration
+    QEIDisable(QEI0_BASE);
+    QEIIntDisable(QEI0_BASE,QEI_INTERROR | QEI_INTDIR | QEI_INTTIMER | QEI_INTINDEX);
+
+    // Configure quadrature encoder, use an arbitrary top limit of 1000
+    QEIConfigure(QEI0_BASE, (QEI_CONFIG_CAPTURE_A_B  | QEI_CONFIG_NO_RESET  | QEI_CONFIG_QUADRATURE | QEI_CONFIG_NO_SWAP), 20000);
+
+    // Enable the quadrature encoder.
+    QEIEnable(QEI0_BASE);
+
+    //Set position to a middle value so we can see if things are working
+    QEIPositionSet(QEI0_BASE, 10000);
 }
 
 void PortF_Handler(void){
