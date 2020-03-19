@@ -37,7 +37,7 @@
 void PortF_Init(void);
 void PWM_Init(void);
 void ADC_Init(void);
-void InitConsole(void);
+void UART_Init(void);
 void QEI_Init(void);
 
 //Interrupts, ISRs
@@ -51,6 +51,7 @@ void PortB_Handler(void);
 void MSDelay(unsigned int itime);
 long read_ADC(void);
 long movinAvg(void);
+void send_u32(uint32_t n);
 /* -----------------------      Global Variables        --------------------- */
 
 bool encA;
@@ -59,8 +60,8 @@ uint32_t pui32ADC0Value[1]; //data from ADC0
 volatile signed long pos = 0; //Cart position counter
 volatile signed long dc = 49999; //0% duty cycle
 volatile signed long integral = 0;
-volatile signed long theta_target = 0;
-volatile signed long theta = 0;
+volatile signed int theta_target = 0;
+volatile signed int theta = 0;
 volatile signed long derivative = 0;
 volatile signed long last_err = 0;
 
@@ -68,6 +69,61 @@ const int moving_avg_size = 5;
 long thetas[moving_avg_size];
 
 volatile bool run = false;
+
+
+//*****************************************************************************
+//
+// Send a string to the UART.
+//
+//*****************************************************************************
+void
+UARTSend(const uint8_t *pui8Buffer, uint32_t ui32Count)
+{
+    //
+    // Loop while there are more characters to send.
+    //
+    while(ui32Count--)
+    {
+        //
+        // Write the next character to the UART.
+        //
+        UARTCharPutNonBlocking(UART0_BASE, *pui8Buffer++);
+
+    }
+}
+
+void
+UARTIntHandler(void)
+{
+    uint32_t ui32Status;
+
+    // Get the interrupt status.
+    ui32Status = UARTIntStatus(UART0_BASE, true);
+
+    //
+    // Clear the asserted interrupts.
+    //
+    UARTIntClear(UART0_BASE, ui32Status);
+
+
+    //UARTSend((uint8_t *)"nah\r\n", 5);
+    //
+    // Loop while there are characters in the receive FIFO.
+    //
+    while(UARTCharsAvail(UART0_BASE))
+    {
+
+        // Read the next character from the UART and write it back to the UART.
+
+        UARTCharPutNonBlocking(UART0_BASE, UARTCharGetNonBlocking(UART0_BASE));
+
+    }
+    send_u32(theta);
+    //UARTprintf("theta = %4d\r", theta);
+}
+
+
+
 /* -----------------------          Main Program        --------------------- */
 int main(void){
     //Inits
@@ -75,31 +131,38 @@ int main(void){
     PortF_Init();
     PWM_Init();
     ADC_Init();
-    InitConsole();
+    UART_Init();
     QEI_Init(); //Pins PD6,7 for quadrature encoder ch. A, B
 
     // Master interrupt enable function for all interrupts
     IntMasterEnable();
     enable_interrupts();
+
+    //UARTSend((uint8_t *)"Enter text: ", 12);
+    //while(1){}
     while(1){
+
         pos = QEIPositionGet(QEI0_BASE);
         //monitor theta
         theta = movinAvg();
 
+        //Push SW1 to toggle run, ensure cart at middle of track.
         while(run & pos < 13000 & pos > 7000){
 
+            pos = QEIPositionGet(QEI0_BASE);
             theta = movinAvg();
 
             //PID controller for inverted pendulum
 
             //integral += theta_target - theta;
             //derivative = (theta_target - theta) - last_err;
-            dc = -800*(theta_target - theta) + 0.001*integral + 2*derivative;
-            if (dc > 0 & dc < 50000){
+            dc = -1000*(theta_target - theta) + 0.001*integral + 2*derivative;
+            if (dc > 0){
                 PWM1_1_CMPA_R = 49999; //0% dc
                 PWM1_1_CMPB_R = 50000 - dc;
 
             }
+            /*
             else if (dc >= 50000){
                 PWM1_1_CMPA_R = 49999; //0% dc
                 PWM1_1_CMPB_R = 0;
@@ -107,9 +170,9 @@ int main(void){
             else if (dc <= -50000){
                 PWM1_1_CMPA_R = 0;
                 PWM1_1_CMPB_R = 49999;
-            }
+            }*/
             else{
-                PWM1_1_CMPA_R = 50000 + dc;
+                PWM1_1_CMPA_R = 49999 + dc;
                 PWM1_1_CMPB_R = 49999;
             }
             //UARTprintf("PB4 = %4d\r", dc,"\n");
@@ -118,6 +181,9 @@ int main(void){
         //if PF4 pushed, stop.
         PWM1_1_CMPB_R = 49999;
         PWM1_1_CMPA_R = 49999;
+        //send_u32(theta);
+        //UARTSend((uint8_t *)"Enter text: ", 12);
+        //MSDelay(100);
     }
 }
 
@@ -236,8 +302,8 @@ void PWM_Init(void) {
 }
 
 //Initialize console to display information while debugging
-void InitConsole(void)
-{
+void UART_Init(void){
+
     // Enable GPIO port A which is used for UART0 pins.
     SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);
 
@@ -249,16 +315,27 @@ void InitConsole(void)
 
     // Enable UART0 so that we can configure the clock.
     SysCtlPeripheralEnable(SYSCTL_PERIPH_UART0);
-
-    // Use the internal 16MHz oscillator as the UART clock source.
-    UARTClockSourceSet(UART0_BASE, UART_CLOCK_PIOSC);
-
     // Select the alternate (UART) function for these pins.
     GPIOPinTypeUART(GPIO_PORTA_BASE, GPIO_PIN_0 | GPIO_PIN_1);
 
+    // Use the internal 16MHz oscillator as the UART clock source.
+    //UARTClockSourceSet(UART0_BASE, UART_CLOCK_PIOSC);
+
+
+    // Configure the UART for 115,200, 8-N-1 operation.
+    //
+    UARTConfigSetExpClk(UART0_BASE, SysCtlClockGet(), 115200,
+                            (UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE |
+                             UART_CONFIG_PAR_NONE));
+
+    // Enable the UART interrupt.
+    //
+    IntEnable(INT_UART0);
+    UARTIntEnable(UART0_BASE, UART_INT_RX | UART_INT_RT);
+
 
     // Initialize the UART for console I/O, baud rate of 115,200
-    UARTStdioConfig(0, 115200, 16000000);
+    //UARTStdioConfig(0, 115200, 16000000);
 }
 
 
@@ -349,6 +426,14 @@ long movinAvg(void){
     sum += thetas[0];
     return sum/moving_avg_size;
 
+}
+
+void send_u32(uint32_t n) {
+    UARTCharPut(UART0_BASE, n & 0xFF);
+    UARTCharPut(UART0_BASE, (n >> 8) & 0xFF);
+    UARTCharPut(UART0_BASE, (n >> 16) & 0xFF);
+    UARTCharPut(UART0_BASE, (n >> 24) & 0xFF);
+    //UARTCharPut(UART0_BASE, '\r\n');
 }
 
 
