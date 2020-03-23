@@ -5,32 +5,33 @@ clear all;
 close all;
 
 %% Constants
-M = .5;         %kg, cart mass
-m = 0.2;        %kg, rod mass
+M = .3;         %kg, cart mass
+m = 0.1;        %kg, rod mass
 b = 0.1;        %N/m/s, cart friction
 g = 9.8;        %m/s^2
-l = 0.3;        %m, pend. length
+l = 0.15;        %m, pend. length to CM.
 
-m_disk = 0.2;   %kg, end of rod mass
+m_disk = 0.3;   %kg, end of rod mass
 r_disk = 0.05;  %cm
 %calculate pend. inertia
 I = (1/3)*m*l^2 + 0.5*m_disk*r_disk^2 + m_disk*(l + r_disk)^2;  %kg.m^2
 
-den = I*(M+m+m_disk) + M*(m+m_disk)*l^2; %denominator for the A and B matrices
+den = I*(M+m) + M*m*l^2; %denominator for the A and B matrices
 
 %Matrices
 A = [0      1              0           0;
-     0 -(I+m*l^2)*b/den  (m^2*g*l^2)/den   0;
+     0 -I*b/den  (m^2*g*l^2)/den   0;
      0      0              0           1;
      0 -(m*l*b)/den       m*g*l*(M+m)/den  0];
 B = [     0;
-     (I+m*l^2)/den;
+        I/den;
           0;
         m*l/den];
 C = [1 0 0 0;
      0 0 1 0]; %x and theta are measurable states (potentiometer and optical encoder)
 D = [0;
      0];
+
 
 %% State modelling
 states = {'x' 'x_dot' 'phi' 'phi_dot'};
@@ -85,7 +86,7 @@ C
 D
 K
 L
-
+A - B*K
 %model and simulate observer feedback whole system
 Ace = [(A-B*K) (B*K);
        zeros(size(A)) (A-L*C)];

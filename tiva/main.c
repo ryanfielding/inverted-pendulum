@@ -65,11 +65,10 @@ void obsv(void);
 uint32_t pui32ADC0Value[1]; //data from ADC0
 
 volatile signed long dc = 49999; //0% duty cycle
-volatile int theta_target = 0;
+volatile int theta_target = 3500; //good starting guess
 volatile int theta = 0;
 volatile long pos = 0; //Cart position counter
 volatile long pos_target = 10000; //Cart position counter
-
 
 const int moving_avg_size = 5;
 long thetas[moving_avg_size];
@@ -110,34 +109,26 @@ int main(void){
             //Update observer feedback
             obsv();
 
-            dc = HMM_DotVec4(HMM_SubtractVec4(xHat,ref), K);
+            dc = HMM_DotVec4(HMM_SubtractVec4(xHatNext,ref), K);
 
             //PID controller for inverted pendulum
             //integral += theta_target - theta;
             //derivative = (theta_target - theta) - last_err;
             //dc = -1000*(theta_target - theta) + 0.001*integral + 2*derivative;
 
+            /*
             if (dc > 0){
                 PWM1_1_CMPA_R = 49999; //0% dc
                 PWM1_1_CMPB_R = 50000 - dc;
 
             }
-            /*
-            else if (dc >= 50000){
-                PWM1_1_CMPA_R = 49999; //0% dc
-                PWM1_1_CMPB_R = 0;
-            }
-            else if (dc <= -50000){
-                PWM1_1_CMPA_R = 0;
-                PWM1_1_CMPB_R = 49999;
-            }*/
             else{
                 PWM1_1_CMPA_R = 49999 + dc;
                 PWM1_1_CMPB_R = 49999;
-            }
+            }*/
 
         }
-        //if PF4 pushed, stop.
+        //Stop motor when 'run' is false.
         PWM1_1_CMPB_R = 49999;
         PWM1_1_CMPA_R = 49999;
         //send_u32(theta);
@@ -212,6 +203,7 @@ void PortF_Handler(void){
         //hold pendulum vertical when PF4 pushed to start controller and set target theta
         theta_target = theta;
         ref.Z = theta_target;
+        xHatNext = HMM_Vec4(pos_target, 0, theta_target, 0);
     }
 }
 
@@ -443,25 +435,27 @@ void UARTIntHandler(void)
 void state_Init(void){
     //STATE MODEL from MATLAB
     //Constant matrix A - BK
-    hmm_vec4 ABK1 = HMM_Vec4(1.0f, 2.0f, 3.0f, 4.0f);
-    hmm_vec4 ABK2 = HMM_Vec4(1.0f, 2.0f, 3.0f, 4.0f);
-    hmm_vec4 ABK3 = HMM_Vec4(1.0f, 2.0f, 3.0f, 4.0f);
-    hmm_vec4 ABK4 = HMM_Vec4(1.0f, 2.0f, 3.0f, 4.0f);
+    ABK1 = HMM_Vec4(0.0f, 1.0f, 0.0f, 0.0f);
+    ABK2 = HMM_Vec4(156.6376f, 119.5888f, -387.7377f, -125.6016f);
+    ABK3 = HMM_Vec4(0.0f, 0.0f, 0.0f, 1.0f);
+    ABK4 = HMM_Vec4(179.0144f,  136.6729f, -433.6301f, -143.5447f);
 
-    hmm_vec4 C1 = HMM_Vec4(1.0f, 2.0f, 3.0f, 4.0f);
-    hmm_vec4 C2 = HMM_Vec4(1.0f, 2.0f, 3.0f, 4.0f);
+    K = HMM_Vec4(-70.7107f, -54.0858f, 175.2039f, 56.7001f);
 
-    hmm_vec2 L1 = HMM_Vec2(1.0f, 2.0f);
-    hmm_vec2 L2 = HMM_Vec2(1.0f, 2.0f);
-    hmm_vec2 L3 = HMM_Vec2(1.0f, 2.0f);
-    hmm_vec2 L4 = HMM_Vec2(1.0f, 2.0f);
+    C1 = HMM_Vec4(1, 0, 0, 0);
+    C2 = HMM_Vec4(0, 0, 1, 0);
+
+    L1 = HMM_Vec2(82.5843081235894f, -1.03748602557963f);
+    L2 = HMM_Vec2(1695.21065947590f, -42.5068963215510f);
+    L3 = HMM_Vec2(-1.17688009245234f, 83.1941728890836f);
+    L4 = HMM_Vec2(-59.2185046124004f, 1739.67809861229f);
 
     //hmm_vec2 y = HMM_Vec2(1.0f, 2.0f);
-    hmm_vec2 yHat = HMM_Vec2(1.0f, 2.0f);
-    hmm_vec2 e = HMM_Vec2(1.0f, 2.0f);
+    yHat = HMM_Vec2(0.0f, 0.0f);
+    e = HMM_Vec2(0.0f, 0.0f);
 
-    hmm_vec4 xHat = HMM_Vec4(1.0f, 2.0f, 3.0f, 4.0f);
-    hmm_vec4 xHatNext = HMM_Vec4(1.0f, 2.0f, 3.0f, 4.0f);
+    xHat = HMM_Vec4(0, 0, 0, 0);
+    xHatNext = HMM_Vec4(pos_target, 0, theta_target, 0);
 
     ref.X = pos_target;
     ref.Y = 0;
