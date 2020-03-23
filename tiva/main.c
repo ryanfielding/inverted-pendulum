@@ -29,6 +29,10 @@
 #include "utils/uartstdio.h"
 #include "utils/uartstdio.c"
 #include <string.h>
+#include <stdio.h>
+
+#define HANDMADE_MATH_IMPLEMENTATION
+#include "HandmadeMath.h"
 
 
 /* -----------------------      Function Prototypes     --------------------- */
@@ -39,6 +43,7 @@ void PWM_Init(void);
 void ADC_Init(void);
 void UART_Init(void);
 void QEI_Init(void);
+void state_Init(void);
 
 //Interrupts, ISRs
 void disable_interrupts(void);
@@ -46,82 +51,34 @@ void enable_interrupts(void);
 void wait_for_interrupts(void);
 void PortF_Handler(void);
 void PortB_Handler(void);
+void UARTIntHandler(void);
 
 //Other
 void MSDelay(unsigned int itime);
 long read_ADC(void);
 long movinAvg(void);
 void send_u32(uint32_t n);
+void UARTSend(const uint8_t *pui8Buffer, uint32_t ui32Count);
+void obsv(void);
 /* -----------------------      Global Variables        --------------------- */
 
-bool encA;
-bool encB;
 uint32_t pui32ADC0Value[1]; //data from ADC0
-volatile signed long pos = 0; //Cart position counter
+
 volatile signed long dc = 49999; //0% duty cycle
-volatile signed long integral = 0;
-volatile signed int theta_target = 0;
-volatile signed int theta = 0;
-volatile signed long derivative = 0;
-volatile signed long last_err = 0;
+volatile int theta_target = 0;
+volatile int theta = 0;
+volatile long pos = 0; //Cart position counter
+volatile long pos_target = 10000; //Cart position counter
+
 
 const int moving_avg_size = 5;
 long thetas[moving_avg_size];
 
 volatile bool run = false;
 
-
-//*****************************************************************************
-//
-// Send a string to the UART.
-//
-//*****************************************************************************
-void
-UARTSend(const uint8_t *pui8Buffer, uint32_t ui32Count)
-{
-    //
-    // Loop while there are more characters to send.
-    //
-    while(ui32Count--)
-    {
-        //
-        // Write the next character to the UART.
-        //
-        UARTCharPutNonBlocking(UART0_BASE, *pui8Buffer++);
-
-    }
-}
-
-void
-UARTIntHandler(void)
-{
-    uint32_t ui32Status;
-
-    // Get the interrupt status.
-    ui32Status = UARTIntStatus(UART0_BASE, true);
-
-    //
-    // Clear the asserted interrupts.
-    //
-    UARTIntClear(UART0_BASE, ui32Status);
-
-
-    //UARTSend((uint8_t *)"nah\r\n", 5);
-    //
-    // Loop while there are characters in the receive FIFO.
-    //
-    while(UARTCharsAvail(UART0_BASE))
-    {
-
-        // Read the next character from the UART and write it back to the UART.
-
-        UARTCharPutNonBlocking(UART0_BASE, UARTCharGetNonBlocking(UART0_BASE));
-
-    }
-    send_u32(theta);
-    //UARTprintf("theta = %4d\r", theta);
-}
-
+//State model variables
+hmm_vec4 ABK1, ABK2, ABK3, ABK4, xHat, xHatNext, C1, C2, K, ref;
+hmm_vec2 L1, L2, L3, L4, e, yHat, y;
 
 
 /* -----------------------          Main Program        --------------------- */
@@ -133,17 +90,15 @@ int main(void){
     ADC_Init();
     UART_Init();
     QEI_Init(); //Pins PD6,7 for quadrature encoder ch. A, B
+    state_Init(); //Initialize state model matrices
 
     // Master interrupt enable function for all interrupts
     IntMasterEnable();
     enable_interrupts();
 
-    //UARTSend((uint8_t *)"Enter text: ", 12);
-    //while(1){}
     while(1){
 
         pos = QEIPositionGet(QEI0_BASE);
-        //monitor theta
         theta = movinAvg();
 
         //Push SW1 to toggle run, ensure cart at middle of track.
@@ -152,11 +107,16 @@ int main(void){
             pos = QEIPositionGet(QEI0_BASE);
             theta = movinAvg();
 
-            //PID controller for inverted pendulum
+            //Update observer feedback
+            obsv();
 
+            dc = HMM_DotVec4(HMM_SubtractVec4(xHat,ref), K);
+
+            //PID controller for inverted pendulum
             //integral += theta_target - theta;
             //derivative = (theta_target - theta) - last_err;
-            dc = -1000*(theta_target - theta) + 0.001*integral + 2*derivative;
+            //dc = -1000*(theta_target - theta) + 0.001*integral + 2*derivative;
+
             if (dc > 0){
                 PWM1_1_CMPA_R = 49999; //0% dc
                 PWM1_1_CMPB_R = 50000 - dc;
@@ -175,8 +135,7 @@ int main(void){
                 PWM1_1_CMPA_R = 49999 + dc;
                 PWM1_1_CMPB_R = 49999;
             }
-            //UARTprintf("PB4 = %4d\r", dc,"\n");
-            last_err = (theta_target - pos);
+
         }
         //if PF4 pushed, stop.
         PWM1_1_CMPB_R = 49999;
@@ -241,7 +200,7 @@ void QEI_Init(void){
     QEIEnable(QEI0_BASE);
 
     //Set position to a middle value so we can see if things are working
-    QEIPositionSet(QEI0_BASE, 10000);
+    QEIPositionSet(QEI0_BASE, pos_target);
 }
 
 void PortF_Handler(void){
@@ -250,19 +209,10 @@ void PortF_Handler(void){
     GPIO_PORTF_ICR_R = 0x10;
     run = !run;
     if (run){
-        //hold pendulum vertical when PF4 pushed to start controller
+        //hold pendulum vertical when PF4 pushed to start controller and set target theta
         theta_target = theta;
+        ref.Z = theta_target;
     }
-
-    /*PWM1_1_CMPA_R -= 5000;
-    PWM1_1_CMPB_R -= 5000;
-    if (PWM1_1_CMPA_R <= 0) {
-       PWM1_1_CMPA_R = 50000;
-       PWM1_1_CMPB_R = 50000;
-    }
-    //PWM1_1_CMPB_R = 999; //DC 0%
-     */
-
 }
 
 void PortB_Handler(void){
@@ -434,6 +384,107 @@ void send_u32(uint32_t n) {
     UARTCharPut(UART0_BASE, (n >> 16) & 0xFF);
     UARTCharPut(UART0_BASE, (n >> 24) & 0xFF);
     //UARTCharPut(UART0_BASE, '\r\n');
+}
+
+
+//*****************************************************************************
+//
+// Send a string to the UART.
+//
+//*****************************************************************************
+void UARTSend(const uint8_t *pui8Buffer, uint32_t ui32Count)
+{
+    //
+    // Loop while there are more characters to send.
+    //
+    while(ui32Count--)
+    {
+        //
+        // Write the next character to the UART.
+        //
+        UARTCharPutNonBlocking(UART0_BASE, *pui8Buffer++);
+
+    }
+}
+
+void UARTIntHandler(void)
+{
+    uint32_t ui32Status;
+
+    // Get the interrupt status.
+    ui32Status = UARTIntStatus(UART0_BASE, true);
+
+    //
+    // Clear the asserted interrupts.
+    //
+    UARTIntClear(UART0_BASE, ui32Status);
+
+
+    //UARTSend((uint8_t *)"nah\r\n", 5);
+    //
+    // Loop while there are characters in the receive FIFO.
+    //
+    while(UARTCharsAvail(UART0_BASE))
+    {
+
+        // Read the next character from the UART and write it back to the UART.
+
+        UARTCharPutNonBlocking(UART0_BASE, UARTCharGetNonBlocking(UART0_BASE));
+
+    }
+    send_u32(theta);
+    //UARTprintf("theta = %4d\r", theta);
+}
+
+
+
+
+
+void state_Init(void){
+    //STATE MODEL from MATLAB
+    //Constant matrix A - BK
+    hmm_vec4 ABK1 = HMM_Vec4(1.0f, 2.0f, 3.0f, 4.0f);
+    hmm_vec4 ABK2 = HMM_Vec4(1.0f, 2.0f, 3.0f, 4.0f);
+    hmm_vec4 ABK3 = HMM_Vec4(1.0f, 2.0f, 3.0f, 4.0f);
+    hmm_vec4 ABK4 = HMM_Vec4(1.0f, 2.0f, 3.0f, 4.0f);
+
+    hmm_vec4 C1 = HMM_Vec4(1.0f, 2.0f, 3.0f, 4.0f);
+    hmm_vec4 C2 = HMM_Vec4(1.0f, 2.0f, 3.0f, 4.0f);
+
+    hmm_vec2 L1 = HMM_Vec2(1.0f, 2.0f);
+    hmm_vec2 L2 = HMM_Vec2(1.0f, 2.0f);
+    hmm_vec2 L3 = HMM_Vec2(1.0f, 2.0f);
+    hmm_vec2 L4 = HMM_Vec2(1.0f, 2.0f);
+
+    //hmm_vec2 y = HMM_Vec2(1.0f, 2.0f);
+    hmm_vec2 yHat = HMM_Vec2(1.0f, 2.0f);
+    hmm_vec2 e = HMM_Vec2(1.0f, 2.0f);
+
+    hmm_vec4 xHat = HMM_Vec4(1.0f, 2.0f, 3.0f, 4.0f);
+    hmm_vec4 xHatNext = HMM_Vec4(1.0f, 2.0f, 3.0f, 4.0f);
+
+    ref.X = pos_target;
+    ref.Y = 0;
+    ref.Z = 0; //gets set when SW1 pushed
+    ref.W = 0;
+
+}
+
+void obsv(void){
+    y.X = pos;
+    y.Y = theta;
+
+    xHat = xHatNext;
+
+    yHat.X = HMM_DotVec4(C1, xHat);
+    yHat.Y = HMM_DotVec4(C2, xHat);
+    e = HMM_SubtractVec2(y, yHat);
+
+    xHatNext.X = HMM_DotVec4(ABK1, xHat) + HMM_DotVec2(L1, e);
+    xHatNext.Y = HMM_DotVec4(ABK2, xHat) + HMM_DotVec2(L2, e);
+    xHatNext.Z = HMM_DotVec4(ABK3, xHat) + HMM_DotVec2(L3, e);
+    xHatNext.W = HMM_DotVec4(ABK4, xHat) + HMM_DotVec2(L4, e);
+
 }
 
 
