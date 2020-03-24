@@ -109,12 +109,13 @@ int main(void){
             //Update observer feedback
             obsv();
 
-            dc = HMM_DotVec4(HMM_SubtractVec4(xHatNext,ref), K);
-
-            //PID controller for inverted pendulum
-            //integral += theta_target - theta;
-            //derivative = (theta_target - theta) - last_err;
-            //dc = -1000*(theta_target - theta) + 0.001*integral + 2*derivative;
+            dc = HMM_DotVec4(xHatNext, K);
+            if(dc > 49999){
+                dc = 49999;
+            }
+            else if(dc < -49999){
+                dc = -49999;
+            }
 
             /*
             if (dc > 0){
@@ -123,7 +124,7 @@ int main(void){
 
             }
             else{
-                PWM1_1_CMPA_R = 49999 + dc;
+                PWM1_1_CMPA_R = 50000 + dc;
                 PWM1_1_CMPB_R = 49999;
             }*/
 
@@ -131,9 +132,7 @@ int main(void){
         //Stop motor when 'run' is false.
         PWM1_1_CMPB_R = 49999;
         PWM1_1_CMPA_R = 49999;
-        //send_u32(theta);
-        //UARTSend((uint8_t *)"Enter text: ", 12);
-        //MSDelay(100);
+
     }
 }
 
@@ -203,7 +202,7 @@ void PortF_Handler(void){
         //hold pendulum vertical when PF4 pushed to start controller and set target theta
         theta_target = theta;
         ref.Z = theta_target;
-        xHatNext = HMM_Vec4(pos_target, 0, theta_target, 0);
+        //xHat = HMM_Vec4(pos_target, 0, theta_target, 0);
     }
 }
 
@@ -436,26 +435,28 @@ void state_Init(void){
     //STATE MODEL from MATLAB
     //Constant matrix A - BK
     ABK1 = HMM_Vec4(0.0f, 1.0f, 0.0f, 0.0f);
-    ABK2 = HMM_Vec4(156.6376f, 119.5888f, -387.7377f, -125.6016f);
+    ABK2 = HMM_Vec4(5.2145f,    5.8940f,  -36.9919f,   -7.2644f);
     ABK3 = HMM_Vec4(0.0f, 0.0f, 0.0f, 1.0f);
-    ABK4 = HMM_Vec4(179.0144f,  136.6729f, -433.6301f, -143.5447f);
+    ABK4 = HMM_Vec4(14.6610f,   16.9838f,  -83.2583f,  -20.4245f);
 
-    K = HMM_Vec4(-70.7107f, -54.0858f, 175.2039f, 56.7001f);
+    K = HMM_Vec4(-1.0000f,   -1.2584f,    7.3368f,    1.3931f);
 
     C1 = HMM_Vec4(1, 0, 0, 0);
     C2 = HMM_Vec4(0, 0, 1, 0);
 
-    L1 = HMM_Vec2(82.5843081235894f, -1.03748602557963f);
-    L2 = HMM_Vec2(1695.21065947590f, -42.5068963215510f);
-    L3 = HMM_Vec2(-1.17688009245234f, 83.1941728890836f);
-    L4 = HMM_Vec2(-59.2185046124004f, 1739.67809861229f);
+    L1 = HMM_Vec2(35.2154f,   15.8380f);
+    L2 = HMM_Vec2(194.3056f,  -48.5237f);
+    L3 = HMM_Vec2(-13.4815f,   36.7690f);
+    L4 = HMM_Vec2(14.9745f,  299.5119f);
+
 
     //hmm_vec2 y = HMM_Vec2(1.0f, 2.0f);
     yHat = HMM_Vec2(0.0f, 0.0f);
     e = HMM_Vec2(0.0f, 0.0f);
 
-    xHat = HMM_Vec4(0, 0, 0, 0);
-    xHatNext = HMM_Vec4(pos_target, 0, theta_target, 0);
+    //Initial conditions of 0 error
+    xHat = HMM_Vec4(0.0f, 0.0f, 0.0f, 0.0f);
+    xHatNext = HMM_Vec4(0.0f, 0.0f, 0.0f, 0.0f);
 
     ref.X = pos_target;
     ref.Y = 0;
@@ -465,10 +466,8 @@ void state_Init(void){
 }
 
 void obsv(void){
-    y.X = pos;
-    y.Y = theta;
-
-    xHat = xHatNext;
+    y.X = pos - ref.X;
+    y.Y = theta - ref.Z;
 
     yHat.X = HMM_DotVec4(C1, xHat);
     yHat.Y = HMM_DotVec4(C2, xHat);
@@ -478,6 +477,8 @@ void obsv(void){
     xHatNext.Y = HMM_DotVec4(ABK2, xHat) + HMM_DotVec2(L2, e);
     xHatNext.Z = HMM_DotVec4(ABK3, xHat) + HMM_DotVec2(L3, e);
     xHatNext.W = HMM_DotVec4(ABK4, xHat) + HMM_DotVec2(L4, e);
+
+    xHat = xHatNext;
 
 }
 
