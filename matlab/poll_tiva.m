@@ -5,7 +5,7 @@ close all;
 s = serial('/dev/cu.usbmodem0E2258731');
 
 %% Connect the serial port to tiva board
-s.InputBufferSize = 6; %critical value to avoid aliasing - '' is 2 bytes, add whatever else TIVA sends
+s.InputBufferSize = 14; %critical value to avoid aliasing - '' is 2 bytes, add whatever else TIVA sends
 s.BaudRate = 115200;
 s.Parity = 'none';
 s.DataBits = 8;
@@ -32,7 +32,7 @@ Tmax = 15; % Total time for data collection (s)
 figure,
 grid on,
 xlabel ('Time (s)'), ylabel('Data'),
-axis([0 Tmax -10 5000]),
+axis([0 Tmax -3000 3000]),
 
 Ts = 0.1; % Sampling time (s)
 i = 0;
@@ -44,9 +44,19 @@ while toc <= Tmax
     i = i + 1;
     %% Read buffer data
     fprintf(s,'');
-    theta = fread(s);
-    thetaVal(i) = theta(3) + theta(4)*16^2;
-    data(i) = thetaVal(i);
+    data = fread(s)
+    theta(i) = data(3) + data(4)*16^2 - 2000;
+    pos(i) = data(7) + data(8)*16^2;
+    dc(i) = data(11) + data(12)*16^2 + data(13)*16^4;
+    if (data(9) == 255)
+        pos(i) = -(255-data(7)) - (255-data(8))*16^2;
+        
+    end
+    
+    if(data(14) == 255)
+        dc(i) = -(255-data(11)) - (255-data(12))*16^2 -(255-data(13))*16^4;
+    end
+    dc(i) = dc(i)/100;
     
     %% Read time stamp
     % If reading faster than sampling rate, force sampling time.
@@ -62,7 +72,11 @@ while toc <= Tmax
     t(i) = toc;
     %% Plot live data
     if i > 1
-        line([t(i-1) t(i)],[data(i-1) data(i)])
+        line([t(i-1) t(i)],[theta(i-1) theta(i)])
+        drawnow
+        line([t(i-1) t(i)],[pos(i-1) pos(i)], 'Color', 'r')
+        drawnow
+        line([t(i-1) t(i)],[dc(i-1) dc(i)], 'Color', 'g')
         drawnow
     end
 end

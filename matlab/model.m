@@ -56,10 +56,12 @@ observability = rank(ob); %rank of 4 = num states, thus observable.
 %% LQR Controller
 
 Q = C'*C;
-%Weights on errors for cart x, pend. theta.
-Q(1,1) = 1;
-Q(3,3) = 10;
-R = 1;
+%Weights on error penalization for each state
+Q(1,1) = 5000;
+
+Q(3,3) = 100;
+
+R = 0.0001;
 [K,S,P_Sys] = lqr(A,B,Q,R);
 
 %model and simulate LQR controller on system
@@ -88,6 +90,7 @@ D
 K
 L
 A - B*K
+P_Sys
 
 %% Model and simulate observer feedback whole system
 Ace = [(A-B*K) (B*K);
