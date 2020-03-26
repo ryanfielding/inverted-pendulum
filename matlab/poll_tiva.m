@@ -56,7 +56,7 @@ while toc <= Tmax
     if(data(14) == 255)
         dc(i) = -(255-data(11)) - (255-data(12))*16^2 -(255-data(13))*16^4;
     end
-    dc(i) = dc(i)/100;
+    dc(i) = 5*dc(i)/100;
     
     %% Read time stamp
     % If reading faster than sampling rate, force sampling time.

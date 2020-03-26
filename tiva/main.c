@@ -30,7 +30,9 @@
 #include "utils/uartstdio.c"
 #include <string.h>
 #include <stdio.h>
+#include "inc/hw_timer.h"
 
+//State observer math
 #define HANDMADE_MATH_IMPLEMENTATION
 #include "HandmadeMath.h"
 
@@ -44,6 +46,7 @@ void ADC_Init(void);
 void UART_Init(void);
 void QEI_Init(void);
 void state_Init(void);
+void Timer_Init(void);
 
 //Interrupts, ISRs
 void disable_interrupts(void);
@@ -60,25 +63,35 @@ long movinAvg(void);
 void send_u32(uint32_t n);
 void UARTSend(const uint8_t *pui8Buffer, uint32_t ui32Count);
 void obsv(void);
+void startTimer(void);
+double stopTimer(void);
+
 /* -----------------------      Global Variables        --------------------- */
 
 uint32_t pui32ADC0Value[1]; //data from ADC0
 
 volatile signed long dc = 49999; //0% duty cycle
-volatile int theta_target = 3500; //good starting guess
+volatile int theta_target = 0; //good starting guess
 volatile int theta = 0;
 volatile long pos = 0; //Cart position counter
-volatile long pos_target = 10000; //Cart position counter
+volatile signed int pos_target = 10000; //Cart position counter
+const float scaleTheta = (7.25*3.14159/4)/4096; //Convert Potentiometer to Radians (rads/counts)
+const float scalePos = 0.05/1170; //Convert x pos to m (m/ticks)
+volatile double dt = 0;
 
-const int moving_avg_size = 5;
+const int moving_avg_size = 10;
 long thetas[moving_avg_size];
 
 volatile bool run = false;
 
 //State model variables
-hmm_vec4 ABK1, ABK2, ABK3, ABK4, xHat, xHatNext, C1, C2, K, ref;
+hmm_vec4 ABK1, ABK2, ABK3, ABK4, xHat, xHatNext, xHatDot, C1, C2, K, ref;
 hmm_vec2 L1, L2, L3, L4, e, yHat, y;
 
+void measureInputs(void){
+    pos = QEIPositionGet(QEI0_BASE) - pos_target; //center at x = 0.
+    theta = 4096 - movinAvg(); //flip theta to correspond with state model
+}
 
 /* -----------------------          Main Program        --------------------- */
 int main(void){
@@ -90,6 +103,7 @@ int main(void){
     UART_Init();
     QEI_Init(); //Pins PD6,7 for quadrature encoder ch. A, B
     state_Init(); //Initialize state model matrices
+    Timer_Init();
 
     // Master interrupt enable function for all interrupts
     IntMasterEnable();
@@ -97,19 +111,23 @@ int main(void){
 
     while(1){
 
-        pos = QEIPositionGet(QEI0_BASE);
-        theta = movinAvg();
+        measureInputs();
 
         //Push SW1 to toggle run, ensure cart at middle of track.
-        while(run & pos < 13000 & pos > 7000){
+        while(run & pos < 3000 & pos > -3000){
 
-            pos = QEIPositionGet(QEI0_BASE);
-            theta = movinAvg();
+            measureInputs();
 
             //Update observer feedback
             obsv();
 
-            dc = HMM_DotVec4(xHatNext, K);
+            //LQR Controller
+            //xHat.X = pos*scalePos;
+            //xHat.Z = (theta_target - theta)*scaleTheta;
+
+            dc = 200*HMM_DotVec4(xHatNext, K);
+            //dc = 50*xHat.Z*K.Z; // just theta
+
             if(dc > 49999){
                 dc = 49999;
             }
@@ -127,6 +145,7 @@ int main(void){
                 PWM1_1_CMPA_R = 50000 + dc;
                 PWM1_1_CMPB_R = 49999;
             }*/
+
 
         }
         //Stop motor when 'run' is false.
@@ -424,7 +443,9 @@ void UARTIntHandler(void)
 
     }
     send_u32(theta);
-    //UARTprintf("theta = %4d\r", theta);
+    send_u32(pos);
+    send_u32(dc);
+
 }
 
 
@@ -435,19 +456,19 @@ void state_Init(void){
     //STATE MODEL from MATLAB
     //Constant matrix A - BK
     ABK1 = HMM_Vec4(0.0f, 1.0f, 0.0f, 0.0f);
-    ABK2 = HMM_Vec4(5.2145f,    5.8940f,  -36.9919f,   -7.2644f);
+    ABK2 = HMM_Vec4(36871.9035383780f,    16215.9066444070f,  -27244.9637252386f,   -5870.79425282494f);
     ABK3 = HMM_Vec4(0.0f, 0.0f, 0.0f, 1.0f);
-    ABK4 = HMM_Vec4(14.6610f,   16.9838f,  -83.2583f,  -20.4245f);
+    ABK4 = HMM_Vec4(103668.656034475f,   45592.8847090477f,  -76580.9055776623f,  -16506.2633506786f);
 
-    K = HMM_Vec4(-1.0000f,   -1.2584f,    7.3368f,    1.3931f);
+    K = HMM_Vec4(-7071.06781186513f,  -3109.91536607374f,   5225.11498057528f,    1125.86496186791f);
 
     C1 = HMM_Vec4(1, 0, 0, 0);
     C2 = HMM_Vec4(0, 0, 1, 0);
 
-    L1 = HMM_Vec2(35.2154f,   15.8380f);
-    L2 = HMM_Vec2(194.3056f,  -48.5237f);
-    L3 = HMM_Vec2(-13.4815f,   36.7690f);
-    L4 = HMM_Vec2(14.9745f,  299.5119f);
+    L1 = HMM_Vec2(781.550953842982f,  291.721565098157f);
+    L2 = HMM_Vec2(29911.1338001262f,  10362.8447334316f);
+    L3 = HMM_Vec2(-1416.56748180188f, 669.564520435314f);
+    L4 = HMM_Vec2(202152.725721452f,  85826.1476851765f);
 
 
     //hmm_vec2 y = HMM_Vec2(1.0f, 2.0f);
@@ -457,8 +478,9 @@ void state_Init(void){
     //Initial conditions of 0 error
     xHat = HMM_Vec4(0.0f, 0.0f, 0.0f, 0.0f);
     xHatNext = HMM_Vec4(0.0f, 0.0f, 0.0f, 0.0f);
+    xHatDot = HMM_Vec4(0.0f, 0.0f, 0.0f, 0.0f);
 
-    ref.X = pos_target;
+    ref.X = 0;
     ref.Y = 0;
     ref.Z = 0; //gets set when SW1 pushed
     ref.W = 0;
@@ -466,21 +488,52 @@ void state_Init(void){
 }
 
 void obsv(void){
-    y.X = pos - ref.X;
-    y.Y = theta - ref.Z;
+    y.X = (pos - ref.X)*scalePos;
+    y.Y = (theta - ref.Z)*scaleTheta;
 
     yHat.X = HMM_DotVec4(C1, xHat);
     yHat.Y = HMM_DotVec4(C2, xHat);
+
     e = HMM_SubtractVec2(y, yHat);
 
-    xHatNext.X = HMM_DotVec4(ABK1, xHat) + HMM_DotVec2(L1, e);
-    xHatNext.Y = HMM_DotVec4(ABK2, xHat) + HMM_DotVec2(L2, e);
-    xHatNext.Z = HMM_DotVec4(ABK3, xHat) + HMM_DotVec2(L3, e);
-    xHatNext.W = HMM_DotVec4(ABK4, xHat) + HMM_DotVec2(L4, e);
+    xHatDot.X = HMM_DotVec4(ABK1, xHat) + HMM_DotVec2(L1, e);
+    xHatDot.Y = HMM_DotVec4(ABK2, xHat) + HMM_DotVec2(L2, e);
+    xHatDot.Z = HMM_DotVec4(ABK3, xHat) + HMM_DotVec2(L3, e);
+    xHatDot.W = HMM_DotVec4(ABK4, xHat) + HMM_DotVec2(L4, e);
+
+
+    dt = stopTimer();
+
+    xHatNext = HMM_AddVec4(xHat, HMM_MultiplyVec4f(xHatDot, dt));
 
     xHat = xHatNext;
+    startTimer();
 
 }
+
+
+void Timer_Init(void) {
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_TIMER3);
+    SysCtlPeripheralReset(SYSCTL_PERIPH_TIMER3);    //
+    TimerConfigure(TIMER3_BASE, TIMER_CFG_ONE_SHOT_UP);
+    TimerControlStall(TIMER3_BASE, TIMER_A, true) ;
+}
+
+void startTimer(void) {
+    TimerDisable(TIMER3_BASE, TIMER_A) ;
+    HWREG(TIMER3_BASE + TIMER_O_TAV) = 0;
+    TimerLoadSet(TIMER3_BASE, TIMER_A,0xFFFFFFFF) ;
+    TimerEnable(TIMER3_BASE, TIMER_A) ;
+}
+
+double stopTimer(void) {
+    //IntDisable(INT_TIMER3A);
+    //TimerIntDisable(TIMER3_BASE, TIMER_TIMA_TIMEOUT) ;
+    //TimerDisable(TIMER3_BASE, TIMER_A) ;
+    uint32_t count = TimerValueGet(TIMER3_BASE, TIMER_A) ;
+    return ((double)count/(double)SysCtlClockGet());  // forcing  double just in case there's an issue w compiler
+}
+
 
 
 /* Disable interrupts by setting the I bit in the PRIMASK system register */

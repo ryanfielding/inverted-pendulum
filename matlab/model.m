@@ -90,7 +90,7 @@ D
 K
 L
 A - B*K
-P_Sys
+
 
 %% Model and simulate observer feedback whole system
 Ace = [(A-B*K) (B*K);
