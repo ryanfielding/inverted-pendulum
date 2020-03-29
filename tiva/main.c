@@ -1,4 +1,3 @@
-#include "SysTickInts.h"
 #include "PLL.h"
 #include "tm4c123gh6pm.h"
 
@@ -35,7 +34,7 @@
 //State observer math
 #define HANDMADE_MATH_IMPLEMENTATION
 #include "HandmadeMath.h"
-
+#include "obsv.h"
 
 /* -----------------------      Function Prototypes     --------------------- */
 
@@ -125,7 +124,7 @@ int main(void){
             //xHat.X = pos*scalePos;
             //xHat.Z = (theta_target - theta)*scaleTheta;
 
-            dc = -10000*HMM_DotVec4(xHatNext, K);
+            dc = -30000*HMM_DotVec4(xHatNext, K);
             //dc = 50*xHat.Z*K.Z; // just theta
 
 
@@ -450,26 +449,23 @@ void UARTIntHandler(void)
 }
 
 
-
-
-
 void state_Init(void){
     //STATE MODEL from MATLAB
     //Constant matrix A - BK
     ABK1 = HMM_Vec4(0.0f, 1.0f, 0.0f, 0.0f);
-    ABK2 = HMM_Vec4(116.599196847303,    144.146697006157,    -674.343164921935,   -218.626631600531);
+    ABK2 = HMM_Vec4(abk2[0], abk2[1], abk2[2], abk2[3]);
     ABK3 = HMM_Vec4(0.0f, 0.0f, 0.0f, 1.0f);
-    ABK4 = HMM_Vec4(327.829075037521,    405.693542701634,    -1875.22837759665,   -614.688337090623);
+    ABK4 = HMM_Vec4(abk4[0], abk4[1], abk4[2], abk4[3]);
 
-    K = HMM_Vec4(-22.3607,  -27.7717,  129.5641,   41.9269);
+    K = HMM_Vec4(k[0], k[1], k[2], k[3]);
 
     C1 = HMM_Vec4(1, 0, 0, 0);
     C2 = HMM_Vec4(0, 0, 1, 0);
 
-    L1 = HMM_Vec2(29.8827,   62.0171);
-    L2 = HMM_Vec2(-10.2989,  -20.4826);
-    L3 = HMM_Vec2(29.1357,   63.5575);
-    L4 = HMM_Vec2(-33.9971,  -46.2293);
+    L1 = HMM_Vec2(l1[0], l1[1]);
+    L2 = HMM_Vec2(l2[0], l2[1]);
+    L3 = HMM_Vec2(l3[0], l3[1]);
+    L4 = HMM_Vec2(l4[0], l4[1]);
 
 
     //hmm_vec2 y = HMM_Vec2(1.0f, 2.0f);

@@ -3,7 +3,7 @@
 clc;
 clear all;
 close all;
-
+global A B K L
 %% Constants
 M = .081;   %kg, cart mass
 m = 0.088;  %kg, total pend. mass
@@ -57,12 +57,14 @@ observability = rank(ob); %rank of 4 = num states, thus observable.
 
 Q = C'*C;
 %Weights on error penalization for each state
-Q(1,1) = 5000;
+Q(1,1) = 1000;
+Q(2,2) = 10;
+Q(3,3) = 10000;
+Q(4,4) = 10;
+R = 0.001;
 
-Q(3,3) = 100;
-
-R = 0.0001;
 [K,S,P_Sys] = lqr(A,B,Q,R);
+P_Sys
 
 %model and simulate LQR controller on system
 Ac = [(A-B*K)];
@@ -78,7 +80,7 @@ sys_cl = ss(Ac,Bc,Cc,Dc,'statename',states,'inputname',inputs,'outputname',outpu
 
 %% Observer based control
 %Observer poles should be ~5-10 times the system LQR ctrl poles.
-P_Obsv = 5*P_Sys;
+P_Obsv = 0.01*P_Sys;
 
 L = place(A',C',P_Obsv)';
 
@@ -106,7 +108,7 @@ outputs = {'x'; 'phi'};
 
 sys_est_cl = ss(Ace,Bce,Cce,Dce,'statename',states,'inputname',inputs,'outputname',outputs);
 % 
-t = 0:0.01:5;
+t = 0:0.01:10;
 %to step input 0.2m
 r = -0.2*ones(size(t));
 
@@ -119,3 +121,9 @@ hold on
 %plot xdot, theta dot
 plot(t,x(:,2), 'g');
 plot(t,x(:,4));
+
+%% Save to .h file for tiva
+
+exportToC();
+copyfile obsv.h '/Users/Ryan/Repos/inverted-pendulum/tiva/'
+
