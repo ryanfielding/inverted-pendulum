@@ -1,4 +1,3 @@
-#include "SysTickInts.h"
 #include "PLL.h"
 #include "tm4c123gh6pm.h"
 
@@ -25,10 +24,17 @@
 #include "driverlib/ssi.h"
 #include "driverlib/systick.h"
 #include "driverlib/adc.h"
+#include "driverlib/qei.h"
 #include "utils/uartstdio.h"
 #include "utils/uartstdio.c"
 #include <string.h>
+#include <stdio.h>
+#include "inc/hw_timer.h"
 
+//State observer math
+#define HANDMADE_MATH_IMPLEMENTATION
+#include "HandmadeMath.h"
+#include "obsv.h"
 
 /* -----------------------      Function Prototypes     --------------------- */
 
@@ -36,22 +42,55 @@
 void PortF_Init(void);
 void PWM_Init(void);
 void ADC_Init(void);
-void InitConsole(void);
+void UART_Init(void);
+void QEI_Init(void);
+void state_Init(void);
+void Timer_Init(void);
 
 //Interrupts, ISRs
 void disable_interrupts(void);
 void enable_interrupts(void);
 void wait_for_interrupts(void);
 void PortF_Handler(void);
+void PortB_Handler(void);
+void UARTIntHandler(void);
 
 //Other
 void MSDelay(unsigned int itime);
-void read_ADC(void);
+long read_ADC(void);
+long movinAvg(void);
+void send_u32(uint32_t n);
+void UARTSend(const uint8_t *pui8Buffer, uint32_t ui32Count);
+void obsv(void);
+void startTimer(void);
+double stopTimer(void);
+
 /* -----------------------      Global Variables        --------------------- */
 
-bool enc1;
-bool enc2;
 uint32_t pui32ADC0Value[1]; //data from ADC0
+
+volatile signed long dc = 49999; //0% duty cycle
+volatile int theta_target = 0; //good starting guess
+volatile int theta = 0;
+volatile long pos = 0; //Cart position counter
+volatile signed int pos_target = 10000; //Cart position counter
+const float scaleTheta = (7.25*3.14159/4)/4096; //Convert Potentiometer to Radians (rads/counts)
+const float scalePos = 0.05/1170; //Convert x pos to m (m/ticks)
+volatile double dt = 0;
+
+const int moving_avg_size = 10;
+long thetas[moving_avg_size];
+
+volatile bool run = false;
+
+//State model variables
+hmm_vec4 ABK1, ABK2, ABK3, ABK4, xHat, xHatNext, xHatDot, C1, C2, K, ref;
+hmm_vec2 L1, L2, L3, L4, e, yHat, y;
+
+void measureInputs(void){
+    pos = QEIPositionGet(QEI0_BASE) - pos_target; //center at x = 0.
+    theta = 4096 - movinAvg(); //flip theta to correspond with state model
+}
 
 /* -----------------------          Main Program        --------------------- */
 int main(void){
@@ -60,26 +99,59 @@ int main(void){
     PortF_Init();
     PWM_Init();
     ADC_Init();
-    InitConsole();
-    // Display the setup on the terminal, View > Terminal
-    /*
-    UARTprintf("ADC0 ->\n");
-    UARTprintf("  Type: Potentiometer\n");
-    UARTprintf("  Samples: One\n");
-    UARTprintf("  Update Rate: 100ms\n");
-    */
+    UART_Init();
+    QEI_Init(); //Pins PD6,7 for quadrature encoder ch. A, B
+    state_Init(); //Initialize state model matrices
+    Timer_Init();
 
-    // Master interrupt enable func for all interrupts
+    // Master interrupt enable function for all interrupts
     IntMasterEnable();
     enable_interrupts();
+
     while(1){
-        read_ADC();
-        MSDelay(100);
-        //UARTprintf("PB4 = %4d\r", pui32ADC0Value[0]," PB6 -> %1d\r", GPIO_PORTB_DATA_R & 0x40," PB7 -> %1d\r", GPIO_PORTB_DATA_R & 0x80);
-        enc1 = GPIO_PORTB_DATA_R & 0x40;
-        enc2 = GPIO_PORTB_DATA_R & 0x80;
-        UARTprintf("PB7 -> %4d\r", enc2);
-        //UARTprintf("PB7 -> %1d\r", GPIO_PORTB_DATA_R & 0x80, "m\n");
+
+        measureInputs();
+
+        //Push SW1 to toggle run, ensure cart at middle of track.
+        while(run & pos < 3000 & pos > -3000){
+
+            measureInputs();
+
+            //Update observer feedback
+            obsv();
+
+            //LQR Controller
+            //xHat.X = pos*scalePos;
+            //xHat.Z = (theta_target - theta)*scaleTheta;
+
+            dc = -30000*HMM_DotVec4(xHatNext, K);
+            //dc = 50*xHat.Z*K.Z; // just theta
+
+
+            if(dc > 49999){
+                dc = 49999;
+            }
+            else if(dc < -49999){
+                dc = -49999;
+            }
+
+
+            if (dc > 0){
+                PWM1_1_CMPA_R = 49999; //0% dc
+                PWM1_1_CMPB_R = 50000 - dc;
+
+            }
+            else{
+                PWM1_1_CMPA_R = 50000 + dc;
+                PWM1_1_CMPB_R = 49999;
+            }
+
+
+        }
+        //Stop motor when 'run' is false.
+        PWM1_1_CMPB_R = 49999;
+        PWM1_1_CMPA_R = 49999;
+
     }
 }
 
@@ -105,28 +177,65 @@ void PortF_Init(void) {
     GPIO_PORTF_ICR_R = 0x10;      // (e) clear flag4
     GPIO_PORTF_IM_R |= 0x10;      // (f) arm interrupt on PF4 *** No IME bit as mentioned in Book ***
     NVIC_PRI7_R = (NVIC_PRI7_R & 0xFF00FFFF)|0x00A00000; // (g) priority 5
-    NVIC_EN0_R = 0x40000000;      // (h) enable interrupt 30 in NVIC for PF4 Handler
+    NVIC_EN0_R |= 0x40000000;      // (h) enable interrupt 30 in NVIC for PF Handler
+}
+
+void QEI_Init(void){
+
+    // Enable QEI Peripherals
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOD);
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_QEI0);
+
+    //Unlock GPIOD7 - Like PF0 its used for NMI - Without this step it doesn't work
+    HWREG(GPIO_PORTD_BASE + GPIO_O_LOCK) = GPIO_LOCK_KEY; //In Tiva include this is the same as "_DD" in older versions (0x4C4F434B)
+    HWREG(GPIO_PORTD_BASE + GPIO_O_CR) |= 0x80;
+    HWREG(GPIO_PORTD_BASE + GPIO_O_LOCK) = 0;
+
+    //Set Pins to be PHA0 and PHB0
+    GPIOPinConfigure(GPIO_PD6_PHA0);
+    GPIOPinConfigure(GPIO_PD7_PHB0);
+
+    //Set GPIO pins for QEI. PhA0 -> PD6, PhB0 ->PD7. I believe this sets the pull up and makes them inputs
+    GPIOPinTypeQEI(GPIO_PORTD_BASE, GPIO_PIN_6 |  GPIO_PIN_7);
+
+    //DISable peripheral and int before configuration
+    QEIDisable(QEI0_BASE);
+    QEIIntDisable(QEI0_BASE,QEI_INTERROR | QEI_INTDIR | QEI_INTTIMER | QEI_INTINDEX);
+
+    // Configure quadrature encoder, use an arbitrary top limit of 1000
+    QEIConfigure(QEI0_BASE, (QEI_CONFIG_CAPTURE_A_B  | QEI_CONFIG_NO_RESET  | QEI_CONFIG_QUADRATURE | QEI_CONFIG_NO_SWAP), 20000);
+
+    // Enable the quadrature encoder.
+    QEIEnable(QEI0_BASE);
+
+    //Set position to a middle value so we can see if things are working
+    QEIPositionSet(QEI0_BASE, pos_target);
 }
 
 void PortF_Handler(void){
-    /*MSDelay (100);
+
+    MSDelay(800);//debounce
     GPIO_PORTF_ICR_R = 0x10;
-    ComparatorValue -= 1000;
-        if (ComparatorValue < 0){
-            ComparatorValue = 10000; // reload to 10000 if it's less than 0
-            PWM1_1_CMPA_R = abs(ComparatorValue - 1); // update comparatorA value
-            PWM1_1_CMPB_R = abs(ComparatorValue - 1); // update comparatorB value
-        }*/
-    MSDelay (100);
-    GPIO_PORTF_ICR_R = 0x10;
-    PWM1_1_CMPA_R -= 0xC35;
-    PWM1_1_CMPB_R -= 0xC35;
-    if (PWM1_1_CMPA_R <= 0) {
-       PWM1_1_CMPA_R = 0x7A12;
-       PWM1_1_CMPB_R = 0x7A12;
+    run = !run;
+    if (run){
+        //hold pendulum vertical when PF4 pushed to start controller and set target theta
+        theta_target = theta;
+        ref.Z = theta_target;
+        //xHat = HMM_Vec4(pos_target, 0, theta_target, 0);
     }
 }
 
+void PortB_Handler(void){
+    GPIO_PORTB_ICR_R = 0x80; //Clear interrupt flag
+
+    if(GPIO_PORTB_DATA_R & 0x40){
+        pos -= 1;
+    }
+    else{
+        pos += 1;
+    }
+
+}
 
 void PWM_Init(void) {
     SYSCTL_RCGCPWM_R |= 0x02;     // 1) enable PWM1 clock
@@ -145,19 +254,16 @@ void PWM_Init(void) {
                                           // drive pwmA LOW when counter matches comparator A
     PWM1_1_GENB_R = 0x80C;           // 6.3) drives pwmB HIGH when counter matches value in PWM1LOAD
                                           // drive pwmB LOW when counter matches comparator B
-    //PWM1_1_LOAD_R = 10001 -1;        // 7) since target period is 100Hz, there are 10,000 clock ticks per period
-    PWM1_1_LOAD_R = 0x7A12;
-    //PWM1_1_CMPA_R = 10000 -1;        // 8) set 0% duty cycle to PE4
-    //PWM1_1_CMPB_R = 10000 -1;        // 9) set 0% duty cycle to PE5
-    PWM1_1_CMPA_R = 0x7A12;
-    PWM1_1_CMPB_R  = 0x7A12;
+    PWM1_1_LOAD_R = 50000;
+    PWM1_1_CMPA_R = 50000;
+    PWM1_1_CMPB_R  = 50000;
     PWM1_1_CTL_R |= 0x01;            // 10) start the timers in PWM generator 1 by enabling the PWM clock
     PWM1_ENABLE_R |= 0x0C;           // 11) Enable M1PWM2 and M1PWM3
 }
 
 //Initialize console to display information while debugging
-void InitConsole(void)
-{
+void UART_Init(void){
+
     // Enable GPIO port A which is used for UART0 pins.
     SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);
 
@@ -169,16 +275,27 @@ void InitConsole(void)
 
     // Enable UART0 so that we can configure the clock.
     SysCtlPeripheralEnable(SYSCTL_PERIPH_UART0);
-
-    // Use the internal 16MHz oscillator as the UART clock source.
-    UARTClockSourceSet(UART0_BASE, UART_CLOCK_PIOSC);
-
     // Select the alternate (UART) function for these pins.
     GPIOPinTypeUART(GPIO_PORTA_BASE, GPIO_PIN_0 | GPIO_PIN_1);
 
+    // Use the internal 16MHz oscillator as the UART clock source.
+    //UARTClockSourceSet(UART0_BASE, UART_CLOCK_PIOSC);
+
+
+    // Configure the UART for 115,200, 8-N-1 operation.
+    //
+    UARTConfigSetExpClk(UART0_BASE, SysCtlClockGet(), 115200,
+                            (UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE |
+                             UART_CONFIG_PAR_NONE));
+
+    // Enable the UART interrupt.
+    //
+    IntEnable(INT_UART0);
+    UARTIntEnable(UART0_BASE, UART_INT_RX | UART_INT_RT);
+
 
     // Initialize the UART for console I/O, baud rate of 115,200
-    UARTStdioConfig(0, 115200, 16000000);
+    //UARTStdioConfig(0, 115200, 16000000);
 }
 
 
@@ -197,13 +314,7 @@ void ADC_Init(void){
     SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOB); //enable GPIO B
     GPIOPinTypeADC(GPIO_PORTB_BASE, GPIO_PIN_4); //PB4 as analog input
     //PB6,7 as digital inputs
-    GPIO_PORTB_CR_R |= 0xC0;                 // allow changes to PB6,7
-    GPIO_PORTB_DEN_R |= 0xC0;     //     enable digital I/O on PF4
-    GPIO_PORTB_PCTL_R &= ~0xFF000000; // configure PF4 as GPIO
-    //GPIO_PORTB_DIR_R &= ~0xC0;    // (c) make PF4 in (built-in button)
-    GPIOPinTypeGPIOInput(GPIO_PORTB_BASE, GPIO_PIN_6); //PB6 as input
-    GPIOPinTypeGPIOInput(GPIO_PORTB_BASE, GPIO_PIN_7); //PB7 as input
-    GPIO_PORTB_AFSEL_R &= ~0xC0;  //     disable alt funct on PF4
+
     //GPIO_PORTB_PUR_R |= 0xC0;     //     enable weak pull-up
     //GPIO_PORTB_PDR_R |= 0xC0;
     //GPIOPadConfigSet(GPIO_PORTB_BASE, GPIO_PIN_6, GPIO_STRENGTH_2MA, GPIO_PIN_TYPE_STD_WPD);
@@ -242,7 +353,7 @@ void ADC_Init(void){
 
 }
 
-void read_ADC(void){
+long read_ADC(void){
     //Trigger the conversion
     ADCProcessorTrigger(ADC0_BASE, 3);
 
@@ -254,10 +365,172 @@ void read_ADC(void){
 
     // Read ADC Value.
     ADCSequenceDataGet(ADC0_BASE, 3, pui32ADC0Value);
+    return pui32ADC0Value[0];
 
     // Display the AIN10 (PB4) digital value on the console.
     //UARTprintf("PB4 = %4d\r", pui32ADC0Value[0],"\n");
 }
+
+long movinAvg(void){
+    //Variables
+
+    int i = 0;
+    long sum = 0;
+
+    sum = 0;
+    for(i = moving_avg_size-1; i > 0; --i){
+        thetas[i] = thetas[i-1];
+        sum += thetas[i];
+    }
+    thetas[0] = read_ADC();
+    sum += thetas[0];
+    return sum/moving_avg_size;
+
+}
+
+void send_u32(uint32_t n) {
+    UARTCharPut(UART0_BASE, n & 0xFF);
+    UARTCharPut(UART0_BASE, (n >> 8) & 0xFF);
+    UARTCharPut(UART0_BASE, (n >> 16) & 0xFF);
+    UARTCharPut(UART0_BASE, (n >> 24) & 0xFF);
+    //UARTCharPut(UART0_BASE, '\r\n');
+}
+
+
+//*****************************************************************************
+//
+// Send a string to the UART.
+//
+//*****************************************************************************
+void UARTSend(const uint8_t *pui8Buffer, uint32_t ui32Count)
+{
+    //
+    // Loop while there are more characters to send.
+    //
+    while(ui32Count--)
+    {
+        //
+        // Write the next character to the UART.
+        //
+        UARTCharPutNonBlocking(UART0_BASE, *pui8Buffer++);
+
+    }
+}
+
+void UARTIntHandler(void)
+{
+    uint32_t ui32Status;
+
+    // Get the interrupt status.
+    ui32Status = UARTIntStatus(UART0_BASE, true);
+
+    //
+    // Clear the asserted interrupts.
+    //
+    UARTIntClear(UART0_BASE, ui32Status);
+
+
+    //UARTSend((uint8_t *)"nah\r\n", 5);
+    //
+    // Loop while there are characters in the receive FIFO.
+    //
+    while(UARTCharsAvail(UART0_BASE))
+    {
+
+        // Read the next character from the UART and write it back to the UART.
+
+        UARTCharPutNonBlocking(UART0_BASE, UARTCharGetNonBlocking(UART0_BASE));
+
+    }
+    send_u32(theta);
+    send_u32(pos);
+    send_u32(dc);
+
+}
+
+
+void state_Init(void){
+    //STATE MODEL from MATLAB
+    //Constant matrix A - BK
+    ABK1 = HMM_Vec4(0.0f, 1.0f, 0.0f, 0.0f);
+    ABK2 = HMM_Vec4(abk2[0], abk2[1], abk2[2], abk2[3]);
+    ABK3 = HMM_Vec4(0.0f, 0.0f, 0.0f, 1.0f);
+    ABK4 = HMM_Vec4(abk4[0], abk4[1], abk4[2], abk4[3]);
+
+    K = HMM_Vec4(k[0], k[1], k[2], k[3]);
+
+    C1 = HMM_Vec4(1, 0, 0, 0);
+    C2 = HMM_Vec4(0, 0, 1, 0);
+
+    L1 = HMM_Vec2(l1[0], l1[1]);
+    L2 = HMM_Vec2(l2[0], l2[1]);
+    L3 = HMM_Vec2(l3[0], l3[1]);
+    L4 = HMM_Vec2(l4[0], l4[1]);
+
+
+    //hmm_vec2 y = HMM_Vec2(1.0f, 2.0f);
+    yHat = HMM_Vec2(0.0f, 0.0f);
+    e = HMM_Vec2(0.0f, 0.0f);
+
+    //Initial conditions of 0 error
+    xHat = HMM_Vec4(0.0f, 0.0f, 0.0f, 0.0f);
+    xHatNext = HMM_Vec4(0.0f, 0.0f, 0.0f, 0.0f);
+    xHatDot = HMM_Vec4(0.0f, 0.0f, 0.0f, 0.0f);
+
+    ref.X = 0;
+    ref.Y = 0;
+    ref.Z = 0; //gets set when SW1 pushed
+    ref.W = 0;
+
+}
+
+void obsv(void){
+    y.X = (pos - ref.X)*scalePos;
+    y.Y = (theta - ref.Z)*scaleTheta;
+
+    yHat.X = HMM_DotVec4(C1, xHat);
+    yHat.Y = HMM_DotVec4(C2, xHat);
+
+    e = HMM_SubtractVec2(y, yHat);
+
+    xHatDot.X = HMM_DotVec4(ABK1, xHat) + HMM_DotVec2(L1, e);
+    xHatDot.Y = HMM_DotVec4(ABK2, xHat) + HMM_DotVec2(L2, e);
+    xHatDot.Z = HMM_DotVec4(ABK3, xHat) + HMM_DotVec2(L3, e);
+    xHatDot.W = HMM_DotVec4(ABK4, xHat) + HMM_DotVec2(L4, e);
+
+
+    dt = stopTimer();
+
+    xHatNext = HMM_AddVec4(xHat, HMM_MultiplyVec4f(xHatDot, dt));
+
+    xHat = xHatNext;
+    startTimer();
+
+}
+
+
+void Timer_Init(void) {
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_TIMER3);
+    SysCtlPeripheralReset(SYSCTL_PERIPH_TIMER3);    //
+    TimerConfigure(TIMER3_BASE, TIMER_CFG_ONE_SHOT_UP);
+    TimerControlStall(TIMER3_BASE, TIMER_A, true) ;
+}
+
+void startTimer(void) {
+    TimerDisable(TIMER3_BASE, TIMER_A) ;
+    HWREG(TIMER3_BASE + TIMER_O_TAV) = 0;
+    TimerLoadSet(TIMER3_BASE, TIMER_A,0xFFFFFFFF) ;
+    TimerEnable(TIMER3_BASE, TIMER_A) ;
+}
+
+double stopTimer(void) {
+    //IntDisable(INT_TIMER3A);
+    //TimerIntDisable(TIMER3_BASE, TIMER_TIMA_TIMEOUT) ;
+    //TimerDisable(TIMER3_BASE, TIMER_A) ;
+    uint32_t count = TimerValueGet(TIMER3_BASE, TIMER_A) ;
+    return ((double)count/(double)SysCtlClockGet());  // forcing  double just in case there's an issue w compiler
+}
+
 
 
 /* Disable interrupts by setting the I bit in the PRIMASK system register */
