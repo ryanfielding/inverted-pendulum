@@ -52,7 +52,6 @@ void disable_interrupts(void);
 void enable_interrupts(void);
 void wait_for_interrupts(void);
 void PortF_Handler(void);
-void PortB_Handler(void);
 void UARTIntHandler(void);
 
 //Other
@@ -223,18 +222,6 @@ void PortF_Handler(void){
         ref.Z = theta_target;
         //xHat = HMM_Vec4(pos_target, 0, theta_target, 0);
     }
-}
-
-void PortB_Handler(void){
-    GPIO_PORTB_ICR_R = 0x80; //Clear interrupt flag
-
-    if(GPIO_PORTB_DATA_R & 0x40){
-        pos -= 1;
-    }
-    else{
-        pos += 1;
-    }
-
 }
 
 void PWM_Init(void) {
