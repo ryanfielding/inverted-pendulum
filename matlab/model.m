@@ -107,23 +107,35 @@ inputs = {'r'};
 outputs = {'x'; 'phi'};
 
 sys_est_cl = ss(Ace,Bce,Cce,Dce,'statename',states,'inputname',inputs,'outputname',outputs);
-% 
 t = 0:0.01:10;
 %to step input 0.2m
 r = -0.2*ones(size(t));
 
+
+f = figure('units','inch','position',[4,4,12,6]);
+subplot(1,2,1);
 [y,t,x]=lsim(sys_est_cl,r,t);
 [AX,H1,H2] = plotyy(t,y(:,1),t,y(:,2),'plot');
 set(get(AX(1),'Ylabel'),'String','cart position (m)')
 set(get(AX(2),'Ylabel'),'String','pendulum angle (radians)')
-title('Step Response with Observer-Based State-Feedback Control')
+%title('Step Response with Observer-Based State-Feedback Control')
 hold on
-%plot xdot, theta dot
-plot(t,x(:,2), 'g');
-plot(t,x(:,4));
+grid on
+legend('x', 'theta');
 
-%% Save to .h file for tiva
+%plot dot states
+subplot(1,2,2)
+[AX2,H3,H4] = plotyy(t,x(:,2),t,x(:,4),'plot');
+set(get(AX2(1),'Ylabel'),'String','cart velocity (m/s)')
+set(get(AX2(2),'Ylabel'),'String','pendulum angular vel (rad/s)')
+%title('Step Response with Observer-Based State-Feedback Control')
+hold on
+grid on
+legend('x dot', 'theta dot');
 
+saveas(f,'models.png');
+
+%% Save matrices to .h file for tiva
 exportToC();
 copyfile obsv.h '/Users/Ryan/Repos/inverted-pendulum/tiva/'
 
