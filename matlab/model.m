@@ -57,11 +57,11 @@ observability = rank(ob); %rank of 4 = num states, thus observable.
 
 Q = C'*C;
 %Weights on error penalization for each state
-Q(1,1) = 1000;
-Q(2,2) = 10;
-Q(3,3) = 10000;
-Q(4,4) = 10;
-R = 0.001;
+Q(1,1) = 100; %x
+Q(2,2) = 10; %x dot
+Q(3,3) = 1000; %theta
+Q(4,4) = 10; %theta dot
+R = 1;
 
 [K,S,P_Sys] = lqr(A,B,Q,R);
 P_Sys
@@ -80,7 +80,7 @@ sys_cl = ss(Ac,Bc,Cc,Dc,'statename',states,'inputname',inputs,'outputname',outpu
 
 %% Observer based control
 %Observer poles should be ~5-10 times the system LQR ctrl poles.
-P_Obsv = 0.01*P_Sys;
+P_Obsv = 10*P_Sys;
 
 L = place(A',C',P_Obsv)';
 
@@ -109,7 +109,7 @@ outputs = {'x'; 'phi'};
 sys_est_cl = ss(Ace,Bce,Cce,Dce,'statename',states,'inputname',inputs,'outputname',outputs);
 t = 0:0.01:10;
 %to step input 0.2m
-r = -0.2*ones(size(t));
+r = -2*ones(size(t));
 
 
 f = figure('units','inch','position',[4,4,12,6]);
@@ -134,6 +134,28 @@ grid on
 legend('x dot', 'theta dot');
 
 saveas(f,'models.png');
+
+
+%% Observer tuning
+% 
+Ao = [A-L*C];
+Bo = [B];
+Co = [C];
+Do = [D];
+states = {'x' 'x_dot' 'phi' 'phi_dot'};
+inputs = {'r'};
+outputs = {'x hat'; 'phi hat'};
+
+sys_obsv = ss(Ao,Bo,Co,Do,'statename',states,'inputname',inputs,'outputname',outputs);
+f2 = figure('units','inch','position',[4,4,12,6]);
+[y,t,x]=lsim(sys_obsv,r,t);
+[AX3,H13,H23] = plotyy(t,y(:,1),t,y(:,2),'plot');
+set(get(AX3(1),'Ylabel'),'String','cart position (m)')
+set(get(AX3(2),'Ylabel'),'String','pendulum angle (radians)')
+%title('Step Response with Observer-Based State-Feedback Control')
+hold on
+grid on
+legend('x hat', 'theta hat');
 
 %% Save matrices to .h file for tiva
 exportToC();

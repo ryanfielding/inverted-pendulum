@@ -68,7 +68,7 @@ double stopTimer(void);
 
 uint32_t pui32ADC0Value[1]; //data from ADC0
 
-volatile signed long dc = 49999; //0% duty cycle
+volatile signed long dc = 1; //0% duty cycle
 volatile int theta_target = 0; //good starting guess
 volatile int theta = 0;
 volatile long pos = 0; //Cart position counter
@@ -123,7 +123,7 @@ int main(void){
             //xHat.X = pos*scalePos;
             //xHat.Z = (theta_target - theta)*scaleTheta;
 
-            dc = -30000*HMM_DotVec4(xHatNext, K);
+            //dc = -30000*HMM_DotVec4(xHatNext, K);
             //dc = 50*xHat.Z*K.Z; // just theta
 
 
@@ -135,7 +135,7 @@ int main(void){
             }
 
 
-            if (dc > 0){
+            if (dc >= 0){
                 PWM1_1_CMPA_R = 49999; //0% dc
                 PWM1_1_CMPB_R = 50000 - dc;
 
@@ -474,24 +474,33 @@ void state_Init(void){
 void obsv(void){
     y.X = (pos - ref.X)*scalePos;
     y.Y = (theta - ref.Z)*scaleTheta;
-
     yHat.X = HMM_DotVec4(C1, xHat);
     yHat.Y = HMM_DotVec4(C2, xHat);
 
     e = HMM_SubtractVec2(y, yHat);
+    //Error tolerance
+    const volatile float tol = 0.0001;
+    //Loop until error -> 0
+    while(HMM_LengthVec2(e) > tol){
 
-    xHatDot.X = HMM_DotVec4(ABK1, xHat) + HMM_DotVec2(L1, e);
-    xHatDot.Y = HMM_DotVec4(ABK2, xHat) + HMM_DotVec2(L2, e);
-    xHatDot.Z = HMM_DotVec4(ABK3, xHat) + HMM_DotVec2(L3, e);
-    xHatDot.W = HMM_DotVec4(ABK4, xHat) + HMM_DotVec2(L4, e);
+        yHat.X = HMM_DotVec4(C1, xHat);
+        yHat.Y = HMM_DotVec4(C2, xHat);
+
+        e = HMM_SubtractVec2(y, yHat);
+
+        xHatDot.X = HMM_DotVec4(ABK1, xHat) + HMM_DotVec2(L1, e);
+        xHatDot.Y = HMM_DotVec4(ABK2, xHat) + HMM_DotVec2(L2, e);
+        xHatDot.Z = HMM_DotVec4(ABK3, xHat) + HMM_DotVec2(L3, e);
+        xHatDot.W = HMM_DotVec4(ABK4, xHat) + HMM_DotVec2(L4, e);
 
 
-    dt = stopTimer();
+        dt = stopTimer();
 
-    xHatNext = HMM_AddVec4(xHat, HMM_MultiplyVec4f(xHatDot, dt));
+        xHatNext = HMM_AddVec4(xHat, HMM_MultiplyVec4f(xHatDot, dt));
 
-    xHat = xHatNext;
-    startTimer();
+        xHat = xHatNext;
+        startTimer();
+    }
 
 }
 
