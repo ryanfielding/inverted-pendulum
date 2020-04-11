@@ -117,7 +117,7 @@ int main(void){
             measureInputs();
 
             //Update observer feedback
-            obsv();
+            //obsv();
 
             //LQR Controller
             //xHat.X = pos*scalePos;
@@ -126,6 +126,8 @@ int main(void){
             //dc = -30000*HMM_DotVec4(xHatNext, K);
             //dc = 50*xHat.Z*K.Z; // just theta
 
+            //p ctrl
+            dc = 600*(theta_target - theta);
 
             if(dc > 49999){
                 dc = 49999;
@@ -135,12 +137,12 @@ int main(void){
             }
 
 
-            if (dc >= 0){
+            if (dc > 0){
                 PWM1_1_CMPA_R = 49999; //0% dc
                 PWM1_1_CMPB_R = 50000 - dc;
 
             }
-            else{
+            else if (dc < 0){
                 PWM1_1_CMPA_R = 50000 + dc;
                 PWM1_1_CMPB_R = 49999;
             }
@@ -429,9 +431,9 @@ void UARTIntHandler(void)
         UARTCharPutNonBlocking(UART0_BASE, UARTCharGetNonBlocking(UART0_BASE));
 
     }
-    send_u32(theta);
+    send_u32(theta_target - theta);
     send_u32(pos);
-    send_u32(dc);
+    //send_u32(dc);
 
 }
 
