@@ -33,12 +33,18 @@ readasync(s);
 % thetaVal = theta(3) + theta(4)*16^2
 
 %% Figure
-Tmax = 10; % Total time for data collection (s)
-f = figure('units','inch','position',[4,4,8,8]);
+Tmax = 30; % Total time for data collection (s)
+f = figure('Color',[0 0 0],'InvertHardcopy','off', 'units','normalized','outerposition',[0 0 1 1]);
+
+axes1 = axes('Parent',f,...
+        'YColor',[1 1 1],...
+        'XColor',[1 1 1],...
+        'Color',[0 0 0]); 
+hold(axes1,'all');
 grid on,
 xlabel ('time (s)'), ylabel('Data'),
-
-%axis([0 Tmax -3000 3000]),
+set(gca,'Color','k')
+axis([0 Tmax -3000 3000]),
 grid on
 
 
@@ -64,8 +70,8 @@ while toc <= Tmax
         theta(i) = -(255-data(3)) - (255-data(4))*16^2;
         
     end
-    pos(i)=pos(i)*scalePos;
-    theta(i)=theta(i)*scaleTheta;
+    pos(i)=pos(i);
+    theta(i)=-theta(i)-2000;
     
 %     if(data(14) == 255)
 %         dc(i) = -(255-data(11)) - (255-data(12))*16^2 -(255-data(13))*16^4;
@@ -86,9 +92,9 @@ while toc <= Tmax
     t(i) = toc;
     %% Plot live data
     if i > 1
-        line([t(i-1) t(i)],[theta(i-1) theta(i)])
+        line([t(i-1) t(i)],[theta(i-1) theta(i)], 'Color', 'g', 'LineWidth', 2)
         drawnow
-        line([t(i-1) t(i)],[pos(i-1) pos(i)], 'Color', 'r')
+        line([t(i-1) t(i)],[pos(i-1) pos(i)], 'Color', 'r', 'LineWidth', 2)
         drawnow
         %line([t(i-1) t(i)],[dc(i-1) dc(i)], 'Color', 'g')
         %drawnow

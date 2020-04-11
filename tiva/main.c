@@ -77,7 +77,7 @@ const float scaleTheta = (7.25*3.14159/4)/4096; //Convert Potentiometer to Radia
 const float scalePos = 0.05/1170; //Convert x pos to m (m/ticks)
 volatile double dt = 0;
 
-const int moving_avg_size = 10;
+const int moving_avg_size = 25;
 long thetas[moving_avg_size];
 
 volatile bool run = false;
@@ -127,7 +127,7 @@ int main(void){
             //dc = 50*xHat.Z*K.Z; // just theta
 
             //p ctrl
-            dc = 600*(theta_target - theta);
+            dc = 800*(theta_target - theta);
 
             if(dc > 49999){
                 dc = 49999;

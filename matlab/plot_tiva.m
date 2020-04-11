@@ -99,10 +99,10 @@ end
 
 set(get(AX2(1),'Ylabel'),'String','cart position (m)')
 set(get(AX2(2),'Ylabel'),'String','pendulum angle (rad)')
-AX2(1).YLim = [-0.1 0.1];
-AX2(2).YLim = [-0.2 0.2];
-set(AX2(1),'YTick',[-0.1:.02:0.1]);
-set(AX2(2),'YTick',[-0.2:.04:0.2]);
+AX2(1).YLim = [-0.2 0.2];
+AX2(2).YLim = [-0.1 0.1];
+set(AX2(1),'YTick',[-0.2:.04:0.2]);
+set(AX2(2),'YTick',[-0.1:.02:0.1]);
 grid on;
 xlabel('time (s)');
 % yyaxis left
