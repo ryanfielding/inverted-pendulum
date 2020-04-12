@@ -80,7 +80,7 @@ volatile double dt = 0;
 volatile float posPrev = 0.0;
 volatile float thetaPrev = 0.0;
 
-const int moving_avg_size = 10;
+const int moving_avg_size = 40;
 long thetas[moving_avg_size];
 
 volatile bool run = false;
@@ -123,6 +123,8 @@ int main(void){
             //obsv();
             //Just LQR ctrl
             lqr();
+            xHat.Y=0;
+            xHat.W=0;
             dc = - HMM_DotVec4(K,xHat);
 
             //LQR Controller

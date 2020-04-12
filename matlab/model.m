@@ -59,9 +59,9 @@ Q = C'*C;
 %Weights on error penalization for each state
 Q(1,1) = 10000; %x
 Q(2,2) = 1; %x dot
-Q(3,3) = 10000; %theta
+Q(3,3) = 100000; %theta
 Q(4,4) = 0.1; %theta dot
-R = 0.1;
+R = 0.00000001;
 
 [K,S,P_Sys] = lqr(A,B,Q,R);
 P_Sys
@@ -83,16 +83,6 @@ sys_cl = ss(Ac,Bc,Cc,Dc,'statename',states,'inputname',inputs,'outputname',outpu
 P_Obsv = 10*P_Sys;
 
 L = place(A',C',P_Obsv)';
-
-%display results for TIVA
-A
-B
-C
-D
-K
-L
-A - B*K
-
 
 %% Model and simulate observer feedback whole system
 Ace = [(A-B*K) (B*K);
