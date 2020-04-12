@@ -61,6 +61,7 @@ long movinAvg(void);
 void send_u32(uint32_t n);
 void UARTSend(const uint8_t *pui8Buffer, uint32_t ui32Count);
 void obsv(void);
+void lqr(void);
 void startTimer(void);
 double stopTimer(void);
 
@@ -76,6 +77,8 @@ volatile signed int pos_target = 10000; //Cart position counter
 const float scaleTheta = (7.25*3.14159/4)/4096; //Convert Potentiometer to Radians (rads/counts)
 const float scalePos = 0.05/1170; //Convert x pos to m (m/ticks)
 volatile double dt = 0;
+volatile float posPrev = 0.0;
+volatile float thetaPrev = 0.0;
 
 const int moving_avg_size = 10;
 long thetas[moving_avg_size];
@@ -117,7 +120,10 @@ int main(void){
             measureInputs();
 
             //Update observer feedback
-            obsv();
+            //obsv();
+            //Just LQR ctrl
+            lqr();
+            dc = - HMM_DotVec4(K,xHat);
 
             //LQR Controller
             //xHat.X = pos*scalePos;
@@ -431,7 +437,9 @@ void UARTIntHandler(void)
     }
     send_u32(theta);
     send_u32(pos);
-    send_u32(dc);
+    //send_u32(dc);
+    //send_u32(xHat.X/scalePos);
+    //send_u32(xHat.Z/scaleTheta);
 
 }
 
@@ -466,7 +474,7 @@ void state_Init(void){
 
     ref.X = 0;
     ref.Y = 0;
-    ref.Z = 0; //gets set when SW1 pushed
+    ref.Z = 0; //theta gets set when SW1 pushed
     ref.W = 0;
 
 }
@@ -504,10 +512,25 @@ void obsv(void){
 
 }
 
+void lqr(void){
+    //xHat = pos posdot theta thetadot
+    //need to estimate the derivative states
+
+    dt = stopTimer();
+    xHat.X = (pos - ref.X)*scalePos;
+    xHat.Y = (xHat.X - posPrev)/dt;
+    xHat.Z = (theta - ref.Z)*scaleTheta;
+    xHat.W = (xHat.Z - thetaPrev)/dt;
+    posPrev = xHat.X;
+    thetaPrev = xHat.Z;
+    startTimer();
+
+
+}
 
 void Timer_Init(void) {
     SysCtlPeripheralEnable(SYSCTL_PERIPH_TIMER3);
-    SysCtlPeripheralReset(SYSCTL_PERIPH_TIMER3);    //
+    SysCtlPeripheralReset(SYSCTL_PERIPH_TIMER3);
     TimerConfigure(TIMER3_BASE, TIMER_CFG_ONE_SHOT_UP);
     TimerControlStall(TIMER3_BASE, TIMER_A, true) ;
 }
@@ -523,7 +546,7 @@ double stopTimer(void) {
     //IntDisable(INT_TIMER3A);
     //TimerIntDisable(TIMER3_BASE, TIMER_TIMA_TIMEOUT) ;
     //TimerDisable(TIMER3_BASE, TIMER_A) ;
-    uint32_t count = TimerValueGet(TIMER3_BASE, TIMER_A) ;
+    uint32_t count = TimerValueGet(TIMER3_BASE, TIMER_A);
     return ((double)count/(double)SysCtlClockGet());  // forcing  double just in case there's an issue w compiler
 }
 
