@@ -57,14 +57,15 @@ observability = rank(ob); %rank of 4 = num states, thus observable.
 
 Q = C'*C;
 %Weights on error penalization for each state
-Q(1,1) = 10000; %x
+Q(1,1) = 1000000; %x
 Q(2,2) = 1; %x dot
 Q(3,3) = 100000; %theta
-Q(4,4) = 0.1; %theta dot
-R = 0.00000001;
+Q(4,4) = 10; %theta dot
+R = 0.0000001;
 
 [K,S,P_Sys] = lqr(A,B,Q,R);
 P_Sys
+K
 
 %model and simulate LQR controller on system
 Ac = [(A-B*K)];
@@ -80,7 +81,7 @@ sys_cl = ss(Ac,Bc,Cc,Dc,'statename',states,'inputname',inputs,'outputname',outpu
 
 %% Observer based control
 %Observer poles should be ~5-10 times the system LQR ctrl poles.
-P_Obsv = 10*P_Sys;
+P_Obsv = 0.1*P_Sys;
 
 L = place(A',C',P_Obsv)';
 
@@ -101,7 +102,7 @@ t = 0:0.01:10;
 %to step input 0.2m
 r = -2*ones(size(t));
 
-
+% 
 % f = figure('units','inch','position',[4,4,12,6]);
 % subplot(1,2,1);
 % [y,t,x]=lsim(sys_est_cl,r,t);
@@ -124,7 +125,17 @@ r = -2*ones(size(t));
 % legend('x dot', 'theta dot');
 % 
 % saveas(f,'models.png');
-
+% 
+% f2 = figure('units','inch','position',[4,4,12,6]);
+% %subplot(1,2,1);
+% %[y,t,x]=lsim(sys_est_cl,r,t);
+% [AX,H1,H2] = plotyy(t,x(:,5),t,x(:,7),'plot');
+% %set(get(AX(1),'Ylabel'),'String','cart position (m)')
+% %set(get(AX(2),'Ylabel'),'String','pendulum angle (radians)')
+% %title('Step Response with Observer-Based State-Feedback Control')
+% hold on
+% grid on
+% %legend('x', 'theta');
 
 %% Observer tuning
 % 
@@ -132,9 +143,9 @@ Ao = [A-L*C];
 Bo = [B];
 Co = [C];
 Do = [D];
-states = {'x' 'x_dot' 'phi' 'phi_dot'};
-inputs = {'r'};
-outputs = {'x hat'; 'phi hat'};
+% states = {'x' 'x_dot' 'phi' 'phi_dot'};
+% inputs = {'r'};
+% outputs = {'x hat'; 'phi hat'};
 
 % sys_obsv = ss(Ao,Bo,Co,Do,'statename',states,'inputname',inputs,'outputname',outputs);
 % f2 = figure('units','inch','position',[4,4,12,6]);

@@ -57,7 +57,7 @@ void UARTIntHandler(void);
 //Other
 void MSDelay(unsigned int itime);
 long read_ADC(void);
-long movinAvg(void);
+float movinAvg(void);
 void send_u32(uint32_t n);
 void UARTSend(const uint8_t *pui8Buffer, uint32_t ui32Count);
 void obsv(void);
@@ -71,7 +71,7 @@ uint32_t pui32ADC0Value[1]; //data from ADC0
 
 volatile signed long dc = 1; //0% duty cycle
 volatile int theta_target = 0; //good starting guess
-volatile int theta = 0;
+volatile float theta = 0.0;
 volatile long pos = 0; //Cart position counter
 volatile signed int pos_target = 10000; //Cart position counter
 const float scaleTheta = (7.25*3.14159/4)/4096; //Convert Potentiometer to Radians (rads/counts)
@@ -80,8 +80,8 @@ volatile double dt = 0;
 volatile float posPrev = 0.0;
 volatile float thetaPrev = 0.0;
 
-const int moving_avg_size = 40;
-long thetas[moving_avg_size];
+const int moving_avg_size = 20;
+float thetas[moving_avg_size];
 
 volatile bool run = false;
 
@@ -91,7 +91,7 @@ hmm_vec2 L1, L2, L3, L4, e, yHat, y;
 
 void measureInputs(void){
     pos = QEIPositionGet(QEI0_BASE) - pos_target; //center at x = 0.
-    theta = 4096 - movinAvg(); //flip theta to correspond with state model
+    theta = 4096.0 - movinAvg(); //flip theta to correspond with state model
 }
 
 /* -----------------------          Main Program        --------------------- */
@@ -123,8 +123,8 @@ int main(void){
             //obsv();
             //Just LQR ctrl
             lqr();
-            xHat.Y=0;
-            xHat.W=0;
+            //xHat.Y=0;
+            //xHat.W=0;
             dc = - HMM_DotVec4(K,xHat);
 
             //LQR Controller
@@ -366,12 +366,12 @@ long read_ADC(void){
     //UARTprintf("PB4 = %4d\r", pui32ADC0Value[0],"\n");
 }
 
-long movinAvg(void){
+float movinAvg(void){
     //Variables
 
     int i = 0;
-    long sum = 0;
-
+    float sum = 0;
+    float avg = moving_avg_size;
     sum = 0;
     for(i = moving_avg_size-1; i > 0; --i){
         thetas[i] = thetas[i-1];
@@ -379,7 +379,8 @@ long movinAvg(void){
     }
     thetas[0] = read_ADC();
     sum += thetas[0];
-    return sum/moving_avg_size;
+
+    return (sum/avg);
 
 }
 
@@ -517,12 +518,12 @@ void obsv(void){
 void lqr(void){
     //xHat = pos posdot theta thetadot
     //need to estimate the derivative states
-
+    float scale = 10000;
     dt = stopTimer();
     xHat.X = (pos - ref.X)*scalePos;
-    xHat.Y = (xHat.X - posPrev)/dt;
+    xHat.Y = (xHat.X - posPrev)/(scale*dt);
     xHat.Z = (theta - ref.Z)*scaleTheta;
-    xHat.W = (xHat.Z - thetaPrev)/dt;
+    xHat.W = (xHat.Z - thetaPrev)/(scale*dt);
     posPrev = xHat.X;
     thetaPrev = xHat.Z;
     startTimer();

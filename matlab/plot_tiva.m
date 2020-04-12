@@ -35,14 +35,14 @@ readasync(s);
 % thetaVal = theta(3) + theta(4)*16^2
 
 %% Figure
-Tmax = 8; % Total time for data collection (s)
+Tmax = 5; % Total time for data collection (s)
 
 
 %axis([0 Tmax -3000 3000]),
 
 
 
-Ts = 0.1; % Sampling time (s)
+Ts = 0.01; % Sampling time (s)
 i = 0;
 data = 0;
 t = 0;

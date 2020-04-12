@@ -71,7 +71,7 @@ while toc <= Tmax
         
     end
     pos(i)=pos(i);
-    theta(i)=-theta(i);
+    %theta(i)=-theta(i);
     
 %     if(data(14) == 255)
 %         dc(i) = -(255-data(11)) - (255-data(12))*16^2 -(255-data(13))*16^4;
