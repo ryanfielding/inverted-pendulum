@@ -82,7 +82,7 @@ volatile float thetaPrev = 0.0;
 volatile float posDotPrev = 0.0;
 volatile float thetaDotPrev = 0.0;
 
-const int moving_avg_size = 20;
+const int moving_avg_size = 15;
 float thetas[moving_avg_size];
 
 volatile bool run = false;
@@ -521,14 +521,14 @@ void obsv(void){
 void lqr(void){
     //xHat = pos posdot theta thetadot
     //need to estimate the derivative states, then apply exp avg filter
-    float scale = 1000;
-    float r = 0.0001;
-    float r2 = 0.000001;
+    float scale = 100000;
+    float rPos = 0.000001;
+    float rTheta = 0.0000001;
     dt = stopTimer();
     xHat.X = (pos - ref.X)*scalePos;
-    xHat.Y = (1-r)*posDotPrev + r*(xHat.X - posPrev);//(scale*dt);
+    xHat.Y = (1-rPos)*posDotPrev + rPos*(xHat.X - posPrev);//(scale*dt);
     xHat.Z = (theta - ref.Z)*scaleTheta;
-    xHat.W = (1-r2)*thetaDotPrev + r2*(xHat.Z - thetaPrev);//(scale*dt);
+    xHat.W = (1-rTheta)*thetaDotPrev + rTheta*(xHat.Z - thetaPrev)*scale;//(scale*dt);
     posPrev = xHat.X;
     posDotPrev = xHat.Y;
     thetaPrev = xHat.Z;
