@@ -94,6 +94,7 @@ hmm_vec2 L1, L2, L3, L4, e, yHat, y;
 void measureInputs(void){
     pos = QEIPositionGet(QEI0_BASE) - pos_target; //center at x = 0.
     theta = 4096.0 - movinAvg(); //flip theta to correspond with state model
+
 }
 
 /* -----------------------          Main Program        --------------------- */
@@ -521,12 +522,13 @@ void lqr(void){
     //xHat = pos posdot theta thetadot
     //need to estimate the derivative states, then apply exp avg filter
     float scale = 1000;
-    float r = 0.01;
+    float r = 0.0001;
+    float r2 = 0.000001;
     dt = stopTimer();
     xHat.X = (pos - ref.X)*scalePos;
-    xHat.Y = (1-r)*posDotPrev + r*(xHat.X - posPrev)/(scale*dt);
+    xHat.Y = (1-r)*posDotPrev + r*(xHat.X - posPrev);//(scale*dt);
     xHat.Z = (theta - ref.Z)*scaleTheta;
-    xHat.W = (1-r)*thetaDotPrev + r*(xHat.Z - thetaPrev)/(scale*dt);
+    xHat.W = (1-r2)*thetaDotPrev + r2*(xHat.Z - thetaPrev);//(scale*dt);
     posPrev = xHat.X;
     posDotPrev = xHat.Y;
     thetaPrev = xHat.Z;

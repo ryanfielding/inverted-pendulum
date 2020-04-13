@@ -70,11 +70,11 @@ observability = rank(ob); %rank of 4 = num states, thus observable.
 
 Q = C'*C;
 %Weights on error penalization for each state
-Q(1,1) = 100000; %x
-Q(2,2) = 10000; %x dot
-Q(3,3) = 1000000; %theta
-Q(4,4) = 10; %theta dot
-R = 0.0001;
+Q(1,1) = 1000; %x
+Q(2,2) = 100; %x dot
+Q(3,3) = 10000; %theta
+Q(4,4) = 100000; %theta dot
+R = 0.00001;
 
 [K,S,P_Sys] = lqr(A,B,Q,R);
 P_Sys
