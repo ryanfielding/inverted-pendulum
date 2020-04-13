@@ -84,7 +84,7 @@ volatile float posDotPrev = 0.0;
 volatile float thetaDotPrev = 0.0;
 
 //Controller Frequency
-volatile int CtrlFreq = 60;
+volatile int CtrlFreq = 100;
 volatile float dt = 0.0;
 
 const int moving_avg_size = 15;
@@ -112,7 +112,7 @@ int main(void){
     UART_Init();
     QEI_Init(); //Pins PD6,7 for quadrature encoder ch. A, B
     state_Init(); //Initialize state model matrices
-    //Timer_Init();
+    Timer_Init();
     dt = 1/CtrlFreq;
 
     // Master interrupt enable function for all interrupts
@@ -146,8 +146,8 @@ void timerISR(void){
         //obsv();
         //Just LQR ctrl
         lqr();
-        //xHat.Y=0;
-        //xHat.W=0;
+        xHat.Y=0;
+        xHat.W=0;
         dc = -10*HMM_DotVec4(K,xHat);
 
         //LQR Controller
