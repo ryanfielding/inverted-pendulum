@@ -53,6 +53,7 @@ void enable_interrupts(void);
 void wait_for_interrupts(void);
 void PortF_Handler(void);
 void UARTIntHandler(void);
+void timerISR(void);
 
 //Other
 void MSDelay(unsigned int itime);
@@ -76,11 +77,15 @@ volatile long pos = 0; //Cart position counter
 volatile signed int pos_target = 10000; //Cart position counter
 const float scaleTheta = (7.25*3.14159/4)/4096; //Convert Potentiometer to Radians (rads/counts)
 const float scalePos = 0.05/1170; //Convert x pos to m (m/ticks)
-volatile double dt = 0;
+
 volatile float posPrev = 0.0;
 volatile float thetaPrev = 0.0;
 volatile float posDotPrev = 0.0;
 volatile float thetaDotPrev = 0.0;
+
+//Controller Frequency
+volatile int CtrlFreq = 60;
+volatile float dt = 0.0;
 
 const int moving_avg_size = 15;
 float thetas[moving_avg_size];
@@ -107,7 +112,8 @@ int main(void){
     UART_Init();
     QEI_Init(); //Pins PD6,7 for quadrature encoder ch. A, B
     state_Init(); //Initialize state model matrices
-    Timer_Init();
+    //Timer_Init();
+    dt = 1/CtrlFreq;
 
     // Master interrupt enable function for all interrupts
     IntMasterEnable();
@@ -119,44 +125,9 @@ int main(void){
 
         //Push SW1 to toggle run, ensure cart at middle of track.
         while(run & pos < 3000 & pos > -3000){
-
+            //want theta and pos to consistently update
             measureInputs();
-
-            //Update observer feedback
-            //obsv();
-            //Just LQR ctrl
-            lqr();
-            //xHat.Y=0;
-            //xHat.W=0;
-            dc = -10*HMM_DotVec4(K,xHat);
-
-            //LQR Controller
-            //xHat.X = pos*scalePos;
-            //xHat.Z = (theta_target - theta)*scaleTheta;
-
-            //dc = -30000*HMM_DotVec4(xHatNext, K);
-            //dc = 50*xHat.Z*K.Z; // just theta
-
-
-            if(dc > 49999){
-                dc = 49999;
-            }
-            else if(dc < -49999){
-                dc = -49999;
-            }
-
-
-            if (dc >= 0){
-                PWM1_1_CMPA_R = 49999; //0% dc
-                PWM1_1_CMPB_R = 50000 - dc;
-
-            }
-            else{
-                PWM1_1_CMPA_R = 50000 + dc;
-                PWM1_1_CMPB_R = 49999;
-            }
-
-
+            //wait_for_interrupts();
         }
         //Stop motor when 'run' is false.
         PWM1_1_CMPB_R = 49999;
@@ -166,6 +137,47 @@ int main(void){
 }
 
 
+void timerISR(void){
+    TimerIntClear( TIMER0_BASE, TIMER_TIMA_TIMEOUT );
+
+    if(run & pos < 3000 & pos > -3000){
+        measureInputs();
+        //Update observer feedback
+        //obsv();
+        //Just LQR ctrl
+        lqr();
+        //xHat.Y=0;
+        //xHat.W=0;
+        dc = -10*HMM_DotVec4(K,xHat);
+
+        //LQR Controller
+        //xHat.X = pos*scalePos;
+        //xHat.Z = (theta_target - theta)*scaleTheta;
+
+        //dc = -30000*HMM_DotVec4(xHatNext, K);
+        //dc = 50*xHat.Z*K.Z; // just theta
+
+
+        if(dc > 49999){
+            dc = 49999;
+        }
+        else if(dc < -49999){
+            dc = -49999;
+        }
+
+
+        if (dc >= 0){
+            PWM1_1_CMPA_R = 49999; //0% dc
+            PWM1_1_CMPB_R = 50000 - dc;
+
+        }
+        else{
+            PWM1_1_CMPA_R = 50000 + dc;
+            PWM1_1_CMPB_R = 49999;
+        }
+    }
+
+}
 /* Initialize PortF GPIOs */
 void PortF_Init(void) {
     SYSCTL_RCGCGPIO_R |= 0x00000020; // (a) activate clock for port F
@@ -449,6 +461,21 @@ void UARTIntHandler(void)
 
 }
 
+void Timer_Init(void){
+    uint32_t ticks = SysCtlClockGet()/CtrlFreq;
+    //send clock to peripheral
+    SysCtlPeripheralEnable( SYSCTL_PERIPH_TIMER0 );
+    // Configure Timer0 to run in periodic mode
+    TimerConfigure(TIMER0_BASE, TIMER_CFG_PERIODIC );
+    //set period
+    TimerLoadSet( TIMER0_BASE, TIMER_A, ticks -1 );
+    // Enable the Interrupt specific vector associated with Timer0A
+    IntEnable(INT_TIMER0A);
+    // Enables a specific event within the timer to generate an interrupt
+    TimerIntEnable(TIMER0_BASE, TIMER_TIMA_TIMEOUT);
+    IntMasterEnable();
+    TimerEnable( TIMER0_BASE, TIMER_A );
+}
 
 void state_Init(void){
     //STATE MODEL from MATLAB
@@ -508,12 +535,12 @@ void obsv(void){
         xHatDot.W = HMM_DotVec4(ABK4, xHat) + HMM_DotVec2(L4, e);
 
 
-        dt = stopTimer();
+        //dt = stopTimer();
 
         xHatNext = HMM_AddVec4(xHat, HMM_MultiplyVec4f(xHatDot, dt));
 
         xHat = xHatNext;
-        startTimer();
+        //startTimer();
     }
 
 }
@@ -524,41 +551,18 @@ void lqr(void){
     float scale = 100000;
     float rPos = 0.000001;
     float rTheta = 0.0000001;
-    dt = stopTimer();
+    //dt = stopTimer();
     xHat.X = (pos - ref.X)*scalePos;
-    xHat.Y = (1-rPos)*posDotPrev + rPos*(xHat.X - posPrev);//(scale*dt);
+    xHat.Y = (1-rPos)*posDotPrev + rPos*(xHat.X - posPrev)/dt;
     xHat.Z = (theta - ref.Z)*scaleTheta;
-    xHat.W = (1-rTheta)*thetaDotPrev + rTheta*(xHat.Z - thetaPrev)*scale;//(scale*dt);
+    xHat.W = (1-rTheta)*thetaDotPrev + rTheta*(xHat.Z - thetaPrev)/dt;
     posPrev = xHat.X;
     posDotPrev = xHat.Y;
     thetaPrev = xHat.Z;
     thetaDotPrev = xHat.W;
-    startTimer();
+    //startTimer();
 
 }
-
-void Timer_Init(void) {
-    SysCtlPeripheralEnable(SYSCTL_PERIPH_TIMER3);
-    SysCtlPeripheralReset(SYSCTL_PERIPH_TIMER3);
-    TimerConfigure(TIMER3_BASE, TIMER_CFG_ONE_SHOT_UP);
-    TimerControlStall(TIMER3_BASE, TIMER_A, true) ;
-}
-
-void startTimer(void) {
-    TimerDisable(TIMER3_BASE, TIMER_A) ;
-    HWREG(TIMER3_BASE + TIMER_O_TAV) = 0;
-    TimerLoadSet(TIMER3_BASE, TIMER_A,0xFFFFFFFF) ;
-    TimerEnable(TIMER3_BASE, TIMER_A) ;
-}
-
-double stopTimer(void) {
-    //IntDisable(INT_TIMER3A);
-    //TimerIntDisable(TIMER3_BASE, TIMER_TIMA_TIMEOUT) ;
-    //TimerDisable(TIMER3_BASE, TIMER_A) ;
-    uint32_t count = TimerValueGet(TIMER3_BASE, TIMER_A);
-    return ((double)count/(double)SysCtlClockGet());  // forcing  double just in case there's an issue w compiler
-}
-
 
 
 /* Disable interrupts by setting the I bit in the PRIMASK system register */
