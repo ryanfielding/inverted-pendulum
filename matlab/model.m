@@ -15,6 +15,19 @@ l = 0.10;   %m, pend. length to CM.
 m_rod = 0.035;  %kg, rod mass
 m_disk = 0.053; %kg, disk mass
 r_disk = 0.037; %m, disk radius
+
+%%Small Wheel
+% M = .081;   %kg, cart mass
+% m = 0.069;  %kg, total pend. mass
+% b = 10;    %N/m/s, cart friction estimate
+% g = 9.81;   %m/s^2
+% l = 0.10;   %m, pend. length to CM.
+% 
+% %calculate pend. inertia
+% m_rod = 0.035;  %kg, rod mass
+% m_disk = 0.034; %kg, disk mass
+% r_disk = 0.02; %m, disk radius
+
 I = (1/3)*m_rod*l^2 + 0.5*m_disk*r_disk^2 + m_disk*(2*l + r_disk)^2;  %kg.m^2
 
 den = I*(M+m) + M*m*l^2; %denominator for the A and B matrices
@@ -57,11 +70,11 @@ observability = rank(ob); %rank of 4 = num states, thus observable.
 
 Q = C'*C;
 %Weights on error penalization for each state
-Q(1,1) = 1000000; %x
-Q(2,2) = 1; %x dot
-Q(3,3) = 100000; %theta
+Q(1,1) = 100000; %x
+Q(2,2) = 10000; %x dot
+Q(3,3) = 1000000; %theta
 Q(4,4) = 10; %theta dot
-R = 0.0000001;
+R = 0.0001;
 
 [K,S,P_Sys] = lqr(A,B,Q,R);
 P_Sys

@@ -79,6 +79,8 @@ const float scalePos = 0.05/1170; //Convert x pos to m (m/ticks)
 volatile double dt = 0;
 volatile float posPrev = 0.0;
 volatile float thetaPrev = 0.0;
+volatile float posDotPrev = 0.0;
+volatile float thetaDotPrev = 0.0;
 
 const int moving_avg_size = 20;
 float thetas[moving_avg_size];
@@ -125,7 +127,7 @@ int main(void){
             lqr();
             //xHat.Y=0;
             //xHat.W=0;
-            dc = - HMM_DotVec4(K,xHat);
+            dc = -10*HMM_DotVec4(K,xHat);
 
             //LQR Controller
             //xHat.X = pos*scalePos;
@@ -517,17 +519,19 @@ void obsv(void){
 
 void lqr(void){
     //xHat = pos posdot theta thetadot
-    //need to estimate the derivative states
-    float scale = 10000;
+    //need to estimate the derivative states, then apply exp avg filter
+    float scale = 1000;
+    float r = 0.01;
     dt = stopTimer();
     xHat.X = (pos - ref.X)*scalePos;
-    xHat.Y = (xHat.X - posPrev)/(scale*dt);
+    xHat.Y = (1-r)*posDotPrev + r*(xHat.X - posPrev)/(scale*dt);
     xHat.Z = (theta - ref.Z)*scaleTheta;
-    xHat.W = (xHat.Z - thetaPrev)/(scale*dt);
+    xHat.W = (1-r)*thetaDotPrev + r*(xHat.Z - thetaPrev)/(scale*dt);
     posPrev = xHat.X;
+    posDotPrev = xHat.Y;
     thetaPrev = xHat.Z;
+    thetaDotPrev = xHat.W;
     startTimer();
-
 
 }
 
