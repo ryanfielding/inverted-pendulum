@@ -71,14 +71,17 @@ observability = rank(ob); %rank of 4 = num states, thus observable.
 Q = C'*C;
 %Weights on error penalization for each state
 Q(1,1) = 10000000; %x
-Q(2,2) = 1000000; %x dot
-Q(3,3) = 5000000; %theta
+Q(2,2) = 10000000; %x dot
+Q(3,3) = 10000000; %theta
 Q(4,4) = 100; %theta dot
 R = 0.001;
 
 [K,S,P_Sys] = lqr(A,B,Q,R);
 P_Sys
 K
+SFS = idss(A-B*K,B,C,D,'Ts',0.1);
+%Examine the pole-zero map.
+pzmap(SFS)
 % instead of LQR, try
 % P_Sys = [-10 -20 -30 -40];
 % K = place(A,B,P_Sys)
@@ -98,7 +101,7 @@ sys_cl = ss(Ac,Bc,Cc,Dc,'statename',states,'inputname',inputs,'outputname',outpu
 
 %% Observer based control
 %Observer poles should be ~5-10 times the system LQR ctrl poles.
-P_Obsv = 0.1*P_Sys;
+P_Obsv = 5*P_Sys;
 
 L = place(A',C',P_Obsv)';
 

@@ -86,7 +86,6 @@ volatile float thetaDotPrev = 0.0;
 //Controller Frequency
 volatile int CtrlFreq = 300;
 volatile float dt = 0.0;
-volatile int count =0;
 
 const int moving_avg_size = 15;
 float thetas[moving_avg_size];
@@ -125,10 +124,9 @@ int main(void){
         measureInputs();
 
         //Push SW1 to toggle run, ensure cart at middle of track.
-        while(run & pos < 3000 & pos > -3000){
+        while(run & pos < 2850 & pos > -2850){
             //want theta and pos to consistently update
             measureInputs();
-            //wait_for_interrupts();
         }
         //Stop motor when 'run' is false.
         PWM1_1_CMPB_R = 49999;
@@ -141,7 +139,7 @@ int main(void){
 void timerISR(void){
     TimerIntClear( TIMER0_BASE, TIMER_TIMA_TIMEOUT );
 
-    if(run & pos < 3000 & pos > -3000){
+    if(run & pos < 2850 & pos > -2850){
         measureInputs();
         //Update observer feedback
         //obsv();
@@ -549,10 +547,9 @@ void obsv(void){
 void lqr(void){
     //xHat = pos posdot theta thetadot
     //need to estimate the derivative states, then apply exp avg filter
-    float scale = 100000;
     float rPosDot = 0.05;
     float rThetaDot = 0.02;
-    float rTheta = 0.2;
+    float rTheta = 0.15;
 
     //dt = stopTimer();
     xHat.X = (pos - ref.X)*scalePos;
@@ -564,7 +561,6 @@ void lqr(void){
     thetaPrev = xHat.Z;
     thetaDotPrev = xHat.W;
     //startTimer();
-    count += 1;
 
 }
 
