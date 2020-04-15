@@ -86,6 +86,7 @@ volatile float thetaDotPrev = 0.0;
 //Controller Frequency
 volatile int CtrlFreq = 100;
 volatile float dt = 0.0;
+volatile int count =0;
 
 const int moving_avg_size = 15;
 float thetas[moving_avg_size];
@@ -113,7 +114,7 @@ int main(void){
     QEI_Init(); //Pins PD6,7 for quadrature encoder ch. A, B
     state_Init(); //Initialize state model matrices
     Timer_Init();
-    dt = 1/CtrlFreq;
+    dt = 1.0/CtrlFreq; //Controller period
 
     // Master interrupt enable function for all interrupts
     IntMasterEnable();
@@ -549,8 +550,8 @@ void lqr(void){
     //xHat = pos posdot theta thetadot
     //need to estimate the derivative states, then apply exp avg filter
     float scale = 100000;
-    float rPos = 0.000001;
-    float rTheta = 0.0000001;
+    float rPos = 0.05;
+    float rTheta = 0.02;
     //dt = stopTimer();
     xHat.X = (pos - ref.X)*scalePos;
     xHat.Y = (1-rPos)*posDotPrev + rPos*(xHat.X - posPrev)/dt;
@@ -561,6 +562,7 @@ void lqr(void){
     thetaPrev = xHat.Z;
     thetaDotPrev = xHat.W;
     //startTimer();
+    count += 1;
 
 }
 

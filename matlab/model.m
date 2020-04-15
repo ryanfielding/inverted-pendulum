@@ -70,17 +70,18 @@ observability = rank(ob); %rank of 4 = num states, thus observable.
 
 Q = C'*C;
 %Weights on error penalization for each state
-Q(1,1) = 100000; %x
-Q(2,2) = 100000; %x dot
-Q(3,3) = 100000; %theta
+Q(1,1) = 1000000; %x
+Q(2,2) = 1000; %x dot
+Q(3,3) = 1000000; %theta
 Q(4,4) = 100; %theta dot
-R = 0.0001;
+R = 0.001;
 
 [K,S,P_Sys] = lqr(A,B,Q,R);
 P_Sys
 K
-% p = [-1 -1 -1 -1];
-% K = place(A,B,p);
+% instead of LQR, try
+% P_Sys = [-10 -20 -30 -40];
+% K = place(A,B,P_Sys)
 
 
 %model and simulate LQR controller on system
