@@ -84,7 +84,7 @@ volatile float posDotPrev = 0.0;
 volatile float thetaDotPrev = 0.0;
 
 //Controller Frequency
-volatile int CtrlFreq = 100;
+volatile int CtrlFreq = 300;
 volatile float dt = 0.0;
 volatile int count =0;
 
@@ -147,7 +147,7 @@ void timerISR(void){
         //obsv();
         //Just LQR ctrl
         lqr();
-        xHat.Y=0;
+        //xHat.Y=0;
         xHat.W=0;
         dc = -10*HMM_DotVec4(K,xHat);
 
@@ -550,13 +550,15 @@ void lqr(void){
     //xHat = pos posdot theta thetadot
     //need to estimate the derivative states, then apply exp avg filter
     float scale = 100000;
-    float rPos = 0.05;
-    float rTheta = 0.02;
+    float rPosDot = 0.05;
+    float rThetaDot = 0.02;
+    float rTheta = 0.2;
+
     //dt = stopTimer();
     xHat.X = (pos - ref.X)*scalePos;
-    xHat.Y = (1-rPos)*posDotPrev + rPos*(xHat.X - posPrev)/dt;
-    xHat.Z = (theta - ref.Z)*scaleTheta;
-    xHat.W = (1-rTheta)*thetaDotPrev + rTheta*(xHat.Z - thetaPrev)/dt;
+    xHat.Y = (1-rPosDot)*posDotPrev + rPosDot*(xHat.X - posPrev)/dt;
+    xHat.Z = (1-rTheta)*thetaPrev + rTheta*(4096.0 - read_ADC() - ref.Z)*scaleTheta;
+    xHat.W = (1-rThetaDot)*thetaDotPrev + rThetaDot*(xHat.Z - thetaPrev)/dt;
     posPrev = xHat.X;
     posDotPrev = xHat.Y;
     thetaPrev = xHat.Z;
