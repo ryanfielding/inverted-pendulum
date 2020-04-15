@@ -80,7 +80,7 @@ D = sys_d.d;
 Q = C'*C;
 Q(1,1) = 1000; %x
 %Q(2,2) = 1; %x
-Q(3,3) = 2000; %theta
+Q(3,3) = 5000; %theta
 R = 1;
 
 %must use dlqr for discrete time LQR controller
