@@ -108,6 +108,7 @@ outputs = {'x'; 'phi'};
 
 sys_cl = ss(Ac,Bc,Cc,Dc,Ts,'statename',states,'inputname',inputs,'outputname',outputs);
 
+
 figure;
 t = 0:0.01:5;
 r =0.2*ones(size(t));
@@ -117,6 +118,8 @@ set(get(AX(1),'Ylabel'),'String','cart position (m)')
 set(get(AX(2),'Ylabel'),'String','pendulum angle (radians)')
 title('Step Response with Digital LQR Control')
 
+figure;
+impulse(sys_cl,t);
 %% Observer based control
 %Observer poles should be ~5-10 times the system LQR ctrl poles.
 P_Obsv = 5*P_Sys;
