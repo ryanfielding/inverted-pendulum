@@ -84,7 +84,7 @@ volatile float posDotPrev = 0.0;
 volatile float thetaDotPrev = 0.0;
 
 //Controller Frequency
-volatile int CtrlFreq = 300;
+volatile int CtrlFreq = 200;
 volatile float dt = 0.0;
 
 const int moving_avg_size = 15;
@@ -146,8 +146,8 @@ void timerISR(void){
         //Just LQR ctrl
         lqr();
         //xHat.Y=0;
-        xHat.W=0;
-        dc = -10*HMM_DotVec4(K,xHat);
+        //xHat.W=0;
+        dc = -10000*HMM_DotVec4(K,xHat);
 
         //LQR Controller
         //xHat.X = pos*scalePos;

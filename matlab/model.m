@@ -47,7 +47,7 @@ D = [0;
      0];
 
 
-%% State modelling
+%% State space modelling
 states = {'x' 'x_dot' 'phi' 'phi_dot'};
 inputs = {'u'};
 outputs = {'x'; 'phi'};
@@ -61,31 +61,40 @@ ob = obsv(sys_ss);
 controllability = rank(co); %rank of 4 = num of states, thus controllable.
 observability = rank(ob); %rank of 4 = num states, thus observable.
 
+
+%Convert to Discrete Time SS Model
+Ts = 1/100; %Controller runs at 100Hz
+sys_d = c2d(sys_ss,Ts,'zoh');
+A = sys_d.a;
+B = sys_d.b;
+C = sys_d.c;
+D = sys_d.d;
+
 %state feedback test
 %poles1 = [ -10 + 5i -10-5i -4 -5]; %choose desired poles
 %k = acker(A, B, poles1);
 %eig(A-B*k); %check system poles
 
-%% LQR Controller
+%% Digital LQR Controller
 
 Q = C'*C;
-%Weights on error penalization for each state
-Q(1,1) = 10000000; %x
-Q(2,2) = 10000000; %x dot
-Q(3,3) = 10000000; %theta
-Q(4,4) = 100; %theta dot
-R = 0.001;
+Q(1,1) = 1000; %x
+%Q(2,2) = 1; %x
+Q(3,3) = 2000; %theta
+R = 1;
 
-[K,S,P_Sys] = lqr(A,B,Q,R);
+%must use dlqr for discrete time LQR controller
+[K,S,P_Sys] = dlqr(A,B,Q,R);
 P_Sys
 K
-SFS = idss(A-B*K,B,C,D,'Ts',0.1);
+
+
+% instead of LQR, try
+% P_Sys = [-0.1 + 0.5i, -0.1 - 0.5i, 0.1, 0.2];
+% K = place(A,B,P_Sys)
+SFS = idss(A-B*K,B,C,D,'Ts',Ts);
 %Examine the pole-zero map.
 pzmap(SFS)
-% instead of LQR, try
-% P_Sys = [-10 -20 -30 -40];
-% K = place(A,B,P_Sys)
-
 
 %model and simulate LQR controller on system
 Ac = [(A-B*K)];
@@ -97,7 +106,16 @@ states = {'x' 'x_dot' 'phi' 'phi_dot'};
 inputs = {'r'};
 outputs = {'x'; 'phi'};
 
-sys_cl = ss(Ac,Bc,Cc,Dc,'statename',states,'inputname',inputs,'outputname',outputs);
+sys_cl = ss(Ac,Bc,Cc,Dc,Ts,'statename',states,'inputname',inputs,'outputname',outputs);
+
+figure;
+t = 0:0.01:5;
+r =0.2*ones(size(t));
+[y,t,x]=lsim(sys_cl,r,t);
+[AX,H1,H2] = plotyy(t,y(:,1),t,y(:,2),'plot');
+set(get(AX(1),'Ylabel'),'String','cart position (m)')
+set(get(AX(2),'Ylabel'),'String','pendulum angle (radians)')
+title('Step Response with Digital LQR Control')
 
 %% Observer based control
 %Observer poles should be ~5-10 times the system LQR ctrl poles.
