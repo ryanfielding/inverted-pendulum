@@ -35,14 +35,14 @@ readasync(s);
 % thetaVal = theta(3) + theta(4)*16^2
 
 %% Figure
-Tmax = 5; % Total time for data collection (s)
+Tmax = 8; % Total time for data collection (s)
 
 
 %axis([0 Tmax -3000 3000]),
 
 
 
-Ts = 0.01; % Sampling time (s)
+Ts = 0.04; % Sampling time (s)
 i = 0;
 data = 0;
 t = 0;
@@ -52,7 +52,7 @@ while toc <= Tmax
     i = i + 1;
     %% Read buffer data
     fprintf(s,'');
-    data = fread(s);
+    data = fread(s)
     theta(i) = data(3) + data(4)*16^2;
     pos(i) = data(7) + data(8)*16^2;
     %dc(i) = data(11) + data(12)*16^2 + data(13)*16^4;
@@ -62,6 +62,7 @@ while toc <= Tmax
     end
     if (data(6) == 255)
         theta(i) = -(255-data(3)) - (255-data(4))*16^2;
+        
     end
     pos(i)=pos(i)*scalePos;
     theta(i)=theta(i)*scaleTheta;

@@ -48,7 +48,7 @@ axis([0 Tmax -3000 3000]),
 grid on
 
 
-Ts = 0.1; % Sampling time (s)
+Ts = 0.02; % Sampling time (s)
 i = 0;
 data = 0;
 t = 0;

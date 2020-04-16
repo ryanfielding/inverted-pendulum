@@ -199,6 +199,6 @@ Do = [D];
 % legend('x hat', 'theta hat');
 
 %% Save matrices to .h file for tiva
-exportToC();
-copyfile obsv.h '/Users/Ryan/Repos/inverted-pendulum/tiva/'
+%exportToC();
+%copyfile obsv.h '/Users/Ryan/Repos/inverted-pendulum/tiva/'
 

@@ -77,6 +77,7 @@ volatile long pos = 0; //Cart position counter
 volatile signed int pos_target = 10000; //Cart position counter
 const float scaleTheta = (7.25*3.14159/4)/4096; //Convert Potentiometer to Radians (rads/counts)
 const float scalePos = 0.05/1170; //Convert x pos to m (m/ticks)
+volatile int thetaSend = 0;
 
 volatile float posPrev = 0.0;
 volatile float thetaPrev = 0.0;
@@ -87,7 +88,7 @@ volatile float thetaDotPrev = 0.0;
 volatile int CtrlFreq = 200;
 volatile float dt = 0.0;
 
-const int moving_avg_size = 15;
+const int moving_avg_size = 25;
 float thetas[moving_avg_size];
 
 volatile bool run = false;
@@ -452,7 +453,8 @@ void UARTIntHandler(void)
         UARTCharPutNonBlocking(UART0_BASE, UARTCharGetNonBlocking(UART0_BASE));
 
     }
-    send_u32(theta);
+    thetaSend = theta-theta_target;
+    send_u32(thetaSend);
     send_u32(pos);
     //send_u32(dc);
     //send_u32(xHat.X/scalePos);
@@ -549,7 +551,7 @@ void lqr(void){
     //need to estimate the derivative states, then apply exp avg filter
     float rPosDot = 0.05;
     float rThetaDot = 0.02;
-    float rTheta = 0.15;
+    float rTheta = 0.20;
 
     //dt = stopTimer();
     xHat.X = (pos - ref.X)*scalePos;
