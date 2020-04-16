@@ -235,7 +235,7 @@ void QEI_Init(void){
 
 void PortF_Handler(void){
 
-    MSDelay(800);//debounce
+    MSDelay(1500);//debounce
     GPIO_PORTF_ICR_R = 0x10;
     run = !run;
     if (run){
