@@ -33,7 +33,7 @@ readasync(s);
 % thetaVal = theta(3) + theta(4)*16^2
 
 %% Figure
-Tmax = 10; % Total time for data collection (s)
+Tmax = 30; % Total time for data collection (s)
 f = figure('Color',[0 0 0],'InvertHardcopy','off', 'units','normalized','outerposition',[0 0 1 1]);
 
 axes1 = axes('Parent',f,...

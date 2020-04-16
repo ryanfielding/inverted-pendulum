@@ -31,7 +31,7 @@
 #include <stdio.h>
 #include "inc/hw_timer.h"
 
-//State observer math
+//Matrix math
 #define HANDMADE_MATH_IMPLEMENTATION
 #include "HandmadeMath.h"
 #include "obsv.h"
@@ -137,26 +137,21 @@ int main(void){
 }
 
 
+/* -----------------------          Controller, frequency = 200Hz        --------------------- */
+
 void timerISR(void){
     TimerIntClear( TIMER0_BASE, TIMER_TIMA_TIMEOUT );
 
     if(run & pos < 2850 & pos > -2850){
         measureInputs();
+
         //Update observer feedback
         //obsv();
+
         //Just LQR ctrl
         lqr();
-        //xHat.Y=0;
-        //xHat.W=0;
+
         dc = -10000*HMM_DotVec4(K,xHat);
-
-        //LQR Controller
-        //xHat.X = pos*scalePos;
-        //xHat.Z = (theta_target - theta)*scaleTheta;
-
-        //dc = -30000*HMM_DotVec4(xHatNext, K);
-        //dc = 50*xHat.Z*K.Z; // just theta
-
 
         if(dc > 49999){
             dc = 49999;
@@ -178,6 +173,11 @@ void timerISR(void){
     }
 
 }
+
+
+/* -----------------------          Other Functions        --------------------- */
+
+
 /* Initialize PortF GPIOs */
 void PortF_Init(void) {
     SYSCTL_RCGCGPIO_R |= 0x00000020; // (a) activate clock for port F
@@ -508,7 +508,7 @@ void state_Init(void){
 
     ref.X = 0;
     ref.Y = 0;
-    ref.Z = 0; //theta gets set when SW1 pushed
+    ref.Z = 0; //theta ref gets set when SW1 pushed
     ref.W = 0;
 
 }
@@ -535,13 +535,10 @@ void obsv(void){
         xHatDot.Z = HMM_DotVec4(ABK3, xHat) + HMM_DotVec2(L3, e);
         xHatDot.W = HMM_DotVec4(ABK4, xHat) + HMM_DotVec2(L4, e);
 
-
-        //dt = stopTimer();
-
         xHatNext = HMM_AddVec4(xHat, HMM_MultiplyVec4f(xHatDot, dt));
 
         xHat = xHatNext;
-        //startTimer();
+
     }
 
 }
@@ -553,7 +550,6 @@ void lqr(void){
     float rThetaDot = 0.02;
     float rTheta = 0.20;
 
-    //dt = stopTimer();
     xHat.X = (pos - ref.X)*scalePos;
     xHat.Y = (1-rPosDot)*posDotPrev + rPosDot*(xHat.X - posPrev)/dt;
     xHat.Z = (1-rTheta)*thetaPrev + rTheta*(4096.0 - read_ADC() - ref.Z)*scaleTheta;
@@ -562,7 +558,6 @@ void lqr(void){
     posDotPrev = xHat.Y;
     thetaPrev = xHat.Z;
     thetaDotPrev = xHat.W;
-    //startTimer();
 
 }
 
